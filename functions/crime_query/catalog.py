@@ -248,6 +248,17 @@ SENSITIVE_COLUMNS = frozenset({
     "ReligionMaster.ReligionName",
 })
 
+# Columns that identify a person or reproduce a case narrative. A query
+# projecting any of these must also project CaseMaster.CrimeNo, so the answer
+# can be traced to specific cases -- aggregate or not.
+IDENTIFYING_COLUMNS = frozenset({
+    "CaseMaster.BriefFacts",
+    "ComplainantDetails.ComplainantName",
+    "Victim.VictimName",
+    "Accused.AccusedName",
+    "Employee.FirstName",
+})
+
 # Tables whose rows belong to a specific case, and therefore must be RBAC-scoped.
 CASE_SCOPED_TABLES = frozenset({
     "CaseMaster",

@@ -17,6 +17,10 @@ _BANNED_NODES = (
     (exp.Subquery, "subqueries are not allowed"),
     (exp.With, "common table expressions are not allowed"),
     (exp.Window, "window functions are not allowed"),
+    # exp.Interval is not an exp.Func subclass, so _check_functions's
+    # find_all(exp.Func) never sees it -- it needs its own ban here or date
+    # arithmetic like `col + INTERVAL '30' DAY` sails through unnoticed.
+    (exp.Interval, "date arithmetic is not allowed; compare against literal 'YYYY-MM-DD' strings"),
 )
 
 # Node types that sqlglot parses as the *root* statement rather than as a
@@ -125,6 +129,25 @@ def _check_functions(select):
         )
 
 
+def _check_joins(select, aliases):
+    # A later task injects a role-scoping predicate onto the single
+    # CaseMaster reference. Comma joins / CROSS JOIN and self-joins both
+    # defeat that: the first leaves a second table unscoped, the second
+    # leaves a second CaseMaster alias unscoped.
+    for join in select.args.get("joins") or []:
+        if join.args.get("on") is None:
+            raise ValidationError(
+                "cross joins are not allowed; every JOIN needs an ON condition"
+            )
+    seen_tables = set()
+    for real_table in aliases.values():
+        if real_table in seen_tables:
+            raise ValidationError(
+                "table {0} may only appear once in a query".format(real_table)
+            )
+        seen_tables.add(real_table)
+
+
 def _check_anchor(select, aliases):
     used = set(aliases.values())
     if used & catalog.CASE_SCOPED_TABLES and "CaseMaster" not in used:
@@ -140,8 +163,25 @@ def _is_aggregate(select):
     return any(isinstance(node, _ALLOWED_FUNC_TYPES) for node in select.find_all(exp.Func))
 
 
+def _identifying_projection(select, aliases):
+    """First projected column that is a person name or a case narrative, or None.
+
+    Grouping/aggregating by a person's name or by BriefFacts still yields
+    identifiable, uncitable rows, so this is checked independently of
+    _is_aggregate.
+    """
+    for projection in select.expressions:
+        for column in projection.find_all(exp.Column):
+            if column.table in aliases:
+                dotted = "{0}.{1}".format(aliases[column.table], column.name)
+                if dotted in catalog.IDENTIFYING_COLUMNS:
+                    return dotted
+    return None
+
+
 def _check_citation(select, aliases):
-    if _is_aggregate(select):
+    identifying = _identifying_projection(select, aliases)
+    if _is_aggregate(select) and identifying is None:
         return
     used = set(aliases.values())
     if not (used & catalog.CASE_SCOPED_TABLES):
@@ -153,6 +193,12 @@ def _check_citation(select, aliases):
             if column.table in aliases and aliases[column.table] == "CaseMaster" \
                     and column.name == "CrimeNo":
                 return
+    if identifying is not None:
+        raise ValidationError(
+            "query projects {0}, which identifies a person or reproduces case "
+            "narrative text; it must also select CaseMaster.CrimeNo so the "
+            "answer can be cited".format(identifying)
+        )
     raise ValidationError(
         "every row-level query must select CaseMaster.CrimeNo so the answer can be cited"
     )
@@ -186,6 +232,7 @@ def validate(sql):
     _check_banned(select)
     _check_tables(select)
     aliases = table_aliases(select)
+    _check_joins(select, aliases)
     _check_columns(select, aliases)
     _check_functions(select)
     _check_anchor(select, aliases)

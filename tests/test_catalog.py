@@ -74,6 +74,12 @@ def test_sensitive_columns_exist_and_exclude_master_keys():
     assert "ReligionMaster.ReligionID" not in catalog.SENSITIVE_COLUMNS
 
 
+def test_identifying_columns_exist():
+    for dotted in catalog.IDENTIFYING_COLUMNS:
+        table, column = dotted.split(".")
+        assert column in catalog.TABLES[table], dotted
+
+
 def test_foreign_keys_reference_real_columns():
     for child_t, child_c, parent_t, parent_c in catalog.FOREIGN_KEYS:
         assert child_c in catalog.TABLES[child_t], (child_t, child_c)
