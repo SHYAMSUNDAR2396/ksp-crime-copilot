@@ -24,6 +24,7 @@ END_DATE = dt.date(2026, 6, 30)
 TREND_START = dt.date(2026, 4, 1)
 
 CLUSTER_CENTRE = (12.9850, 77.6600)
+CLUSTER_RADIUS_DEG = 0.0018  # ~200 m at Bengaluru's latitude
 RAVI_SPELLINGS = ["Ravi Kumar", "Ravi K", "R. Kumar", "Ravikumar"]
 
 STATES = [(1, "Karnataka", 1, 1)]
@@ -119,6 +120,42 @@ BRIEF_FACTS = {
 }
 PLACES = ["the main market", "a residential layout", "the bus terminus", "an industrial estate",
           "the temple street", "a commercial complex", "the ring road junction", "a park"]
+
+
+def _point_in_cluster(rng, centre):
+    """Uniform-ish point strictly inside CLUSTER_RADIUS_DEG of centre.
+
+    Rejection sampling, so the radius is a guarantee and not a 3-sigma hope.
+    """
+    while True:
+        dlat = rng.gauss(0, CLUSTER_RADIUS_DEG / 3.0)
+        dlon = rng.gauss(0, CLUSTER_RADIUS_DEG / 3.0)
+        if (dlat * dlat + dlon * dlon) <= CLUSTER_RADIUS_DEG ** 2:
+            return centre[0] + dlat, centre[1] + dlon
+
+
+def _pick_variant_cases(cases, units=(1, 2, 5), count=4):
+    """Case IDs for the seeded name variants: one per station, then topped up.
+
+    Deterministic: `cases` is already in CaseMasterID order, and we never
+    consume the RNG here.
+    """
+    by_unit = {}
+    for case in cases:
+        by_unit.setdefault(case[5], []).append(case[0])
+
+    picked = [by_unit[unit][0] for unit in units]
+    for unit in units:
+        for case_id in by_unit[unit][1:]:
+            if len(picked) == count:
+                break
+            picked.append(case_id)
+        if len(picked) == count:
+            break
+
+    if len(picked) != count:
+        raise AssertionError("not enough candidate cases for name variants")
+    return picked
 
 
 def _iso(date):
@@ -249,8 +286,7 @@ def build(sqlite_path, csv_dir=None, seed=SEED):
     for index, (unit_id, subhead_id, reg, forced_centre) in enumerate(plan, start=1):
         district_id = next(d for u, _n, d in UNIT_NAMES if u == unit_id)
         if forced_centre:
-            lat = forced_centre[0] + rng.gauss(0, 0.0015)
-            lon = forced_centre[1] + rng.gauss(0, 0.0015)
+            lat, lon = _point_in_cluster(rng, forced_centre)
         else:
             clat, clon = DISTRICT_CENTRES[district_id]
             lat, lon = clat + rng.gauss(0, 0.05), clon + rng.gauss(0, 0.05)
@@ -298,8 +334,7 @@ def build(sqlite_path, csv_dir=None, seed=SEED):
             cs_id += 1
 
     # Seeded name variants: one person, four spellings, at least three stations.
-    variant_targets = sorted({c[0] for c in cases if c[5] in (1, 2, 5)})[:4]
-    assert len(variant_targets) == 4, "not enough candidate cases for name variants"
+    variant_targets = _pick_variant_cases(cases)
     for spelling, case_id in zip(RAVI_SPELLINGS, variant_targets):
         accused_rows.append((accused_id, case_id, spelling, 31, 1, "A9"))
         accused_id += 1

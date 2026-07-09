@@ -30,7 +30,7 @@ def test_every_catalog_table_is_populated(built):
 
 def test_crimeno_is_eighteen_digits(built):
     conn, _, _ = built
-    rows = conn.execute('SELECT CrimeNo FROM "CaseMaster" LIMIT 50').fetchall()
+    rows = conn.execute('SELECT CrimeNo FROM "CaseMaster"').fetchall()
     for row in rows:
         assert len(row["CrimeNo"]) == 18, row["CrimeNo"]
         assert row["CrimeNo"].isdigit()
@@ -38,7 +38,7 @@ def test_crimeno_is_eighteen_digits(built):
 
 def test_caseno_is_last_nine_digits_of_crimeno(built):
     conn, _, _ = built
-    rows = conn.execute('SELECT CrimeNo, CaseNo FROM "CaseMaster" LIMIT 50').fetchall()
+    rows = conn.execute('SELECT CrimeNo, CaseNo FROM "CaseMaster"').fetchall()
     for row in rows:
         assert row["CaseNo"] == row["CrimeNo"][-9:]
 
@@ -84,27 +84,40 @@ def test_burglary_cluster_is_tight(built):
         """
     ).fetchall()
     lat0, lon0 = gen_data.CLUSTER_CENTRE
-    tight = [
+    radius = gen_data.CLUSTER_RADIUS_DEG
+    within_radius = [
         r for r in rows
-        if abs(r["latitude"] - lat0) < 0.005 and abs(r["longitude"] - lon0) < 0.005
+        if (r["latitude"] - lat0) ** 2 + (r["longitude"] - lon0) ** 2 <= radius ** 2
     ]
-    assert len(tight) >= 60
+    assert len(within_radius) >= 60
 
 
 def test_name_variants_span_three_stations(built):
     conn, _, _ = built
-    placeholders = ",".join("?" for _ in gen_data.RAVI_SPELLINGS)
     rows = conn.execute(
         """
         SELECT Accused.AccusedName, CaseMaster.PoliceStationID
         FROM "Accused"
         JOIN "CaseMaster" ON Accused.CaseMasterID = CaseMaster.CaseMasterID
-        WHERE Accused.AccusedName IN ({0})
+        WHERE Accused.PersonID = 'A9'
+        """
+    ).fetchall()
+    assert len(rows) == 4
+    assert {r["AccusedName"] for r in rows} == set(gen_data.RAVI_SPELLINGS)
+    assert len({r["PoliceStationID"] for r in rows}) >= 3
+
+
+def test_name_variant_test_is_not_satisfied_by_namesakes(built):
+    conn, _, _ = built
+    placeholders = ",".join("?" for _ in gen_data.RAVI_SPELLINGS)
+    rows = conn.execute(
+        """
+        SELECT AccusedName FROM "Accused"
+        WHERE AccusedName IN ({0})
         """.format(placeholders),
         gen_data.RAVI_SPELLINGS,
     ).fetchall()
-    assert {r["AccusedName"] for r in rows} == set(gen_data.RAVI_SPELLINGS)
-    assert len({r["PoliceStationID"] for r in rows}) >= 3
+    assert len(rows) > 4
 
 
 def test_sensitive_columns_are_populated_not_null(built):
