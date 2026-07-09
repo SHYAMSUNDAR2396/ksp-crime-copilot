@@ -1,0 +1,4 @@
+sqlglot>=25,<27
+pytest>=8,<9
+requests>=2.31,<3
+PyYAML>=6,<7
