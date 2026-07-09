@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Datathon 2026 — Conversational AI for the KSP Crime Database | Technical Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+:root{
+  --ink:#0F1B2D;        /* deep navy ink */
+  --ink-soft:#1B2C42;
+  --slate:#42566C;      /* muted slate text */
+  --paper:#FBFAF6;      /* warm dossier paper */
+  --paper-2:#F2EFE6;    /* card paper */
+  --line:#D9D3C4;       /* hairline */
+  --brass:#B8902A;      /* signature insignia brass */
+  --brass-deep:#8A6A18;
+  --teal:#147878;       /* signal / links */
+  --alert:#A63B25;      /* risk / compliance red */
+  --white:#ffffff;
+  --maxw:980px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;
+  font-size:18px;line-height:1.62;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+.mono{font-family:"IBM Plex Mono",monospace}
+h1,h2,h3,h4{font-family:"Archivo",system-ui,sans-serif;line-height:1.12;letter-spacing:-.01em;color:var(--ink)}
+a{color:var(--teal);text-decoration:none;border-bottom:1px solid rgba(20,120,120,.35)}
+a:hover{border-bottom-color:var(--teal)}
+
+/* ---------- COVER ---------- */
+.cover{background:var(--ink);color:#EAE6DA;padding:0;position:relative;overflow:hidden}
+.cover .wrap{padding:84px 28px 70px}
+.cover::before{content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(900px 380px at 82% -8%, rgba(184,144,42,.20), transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 56px);
+  pointer-events:none}
+.classif{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.28em;
+  color:var(--brass);text-transform:uppercase;display:flex;gap:14px;align-items:center}
+.classif::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--brass),transparent)}
+.cover h1{color:var(--white);font-size:clamp(34px,6vw,62px);font-weight:800;margin:26px 0 14px;max-width:16ch}
+.cover .sub{font-size:21px;color:#C7CEDA;max-width:60ch;margin:0 0 30px}
+.seal{position:absolute;right:34px;top:46px;width:108px;height:108px;border:2px solid var(--brass);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;
+  font-family:"IBM Plex Mono",monospace;font-size:9px;letter-spacing:.18em;color:var(--brass);
+  text-transform:uppercase;line-height:1.5;opacity:.92}
+.seal span{transform:rotate(-6deg)}
+.metarow{display:flex;flex-wrap:wrap;gap:10px 30px;margin-top:18px;
+  font-family:"IBM Plex Mono",monospace;font-size:13px;color:#9FB0C4}
+.metarow b{color:#E7DCC0;font-weight:500}
+.pillrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:30px}
+.pill{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.05em;
+  border:1px solid rgba(184,144,42,.5);color:#E7DCC0;padding:6px 11px;border-radius:2px;background:rgba(184,144,42,.07)}
+
+/* ---------- TOC ---------- */
+.toc{background:var(--ink-soft);color:#D7DBE2;padding:46px 0 52px;border-top:1px solid rgba(184,144,42,.25)}
+.toc h2{color:var(--brass);font-size:14px;letter-spacing:.22em;font-family:"IBM Plex Mono",monospace;
+  text-transform:uppercase;margin:0 0 22px}
+.tocgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px 34px}
+.tocgrid a{display:flex;gap:14px;padding:9px 0;color:#CDD3DC;border-bottom:1px solid rgba(255,255,255,.07);
+  font-family:"Archivo",sans-serif;font-size:15.5px;font-weight:500}
+.tocgrid a:hover{color:var(--white)}
+.tocgrid .n{font-family:"IBM Plex Mono",monospace;color:var(--brass);font-size:13px;min-width:26px}
+
+/* ---------- SECTIONS ---------- */
+section.sec{padding:62px 0 8px;border-top:1px solid var(--line)}
+section.sec:first-of-type{border-top:none}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.2em;color:var(--brass-deep);
+  text-transform:uppercase;display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.eyebrow::before{content:"";width:30px;height:2px;background:var(--brass)}
+section.sec h2{font-size:clamp(26px,3.6vw,38px);font-weight:800;margin:0 0 18px;max-width:24ch}
+section.sec h3{font-size:22px;font-weight:700;margin:34px 0 10px;color:var(--ink)}
+section.sec h4{font-size:17px;font-weight:700;margin:22px 0 6px;color:var(--ink-soft);
+  font-family:"Archivo",sans-serif}
+p{margin:0 0 16px}
+ul,ol{margin:0 0 18px;padding-left:22px}
+li{margin:0 0 8px}
+strong{color:var(--ink)}
+
+/* lede */
+.lede{font-size:20px;color:var(--slate);border-left:3px solid var(--brass);padding-left:18px;margin:0 0 26px}
+
+/* dossier callout */
+.dossier{background:var(--paper-2);border:1px solid var(--line);border-left:4px solid var(--ink);
+  padding:18px 22px;margin:24px 0;border-radius:3px}
+.dossier .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--slate);margin-bottom:6px}
+.dossier.brass{border-left-color:var(--brass)}
+.dossier.teal{border-left-color:var(--teal)}
+.risk{background:#FBF1EC;border:1px solid #E6C3B6;border-left:4px solid var(--alert);padding:16px 20px;
+  margin:22px 0;border-radius:3px}
+.risk .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--alert);margin-bottom:6px;font-weight:600}
+
+/* query examples */
+.q{font-family:"IBM Plex Mono",monospace;font-size:14.5px;background:var(--ink);color:#E9E4D4;
+  padding:11px 15px;border-radius:3px;margin:8px 0;display:block;border-left:3px solid var(--brass)}
+.q::before{content:"> ";color:var(--brass)}
+
+/* tables */
+.tablewrap{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:3px}
+table{border-collapse:collapse;width:100%;font-family:"Archivo",sans-serif;font-size:14.5px;background:var(--white)}
+caption{caption-side:top;text-align:left;font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--slate);padding:0 0 8px}
+th,td{padding:10px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+thead th{background:var(--ink);color:#EDE7D7;font-weight:600;font-size:13px;letter-spacing:.03em;
+  text-transform:uppercase;position:sticky;top:0}
+tbody tr:nth-child(even){background:var(--paper)}
+td .mono{font-size:13px}
+.badge{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11px;padding:2px 7px;border-radius:2px;
+  font-weight:600;line-height:1.5}
+.b-hi{background:#E7F1EC;color:#1E6B4A;border:1px solid #BcdCC9}
+.b-md{background:#FBF3DE;color:#8A6A18;border:1px solid #E6D5A0}
+.b-lo{background:#F4E7E3;color:#A63B25;border:1px solid #E3C2B7}
+
+/* diagrams */
+.figure{margin:26px 0;background:var(--white);border:1px solid var(--line);border-radius:4px;padding:20px}
+.figure .cap{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--slate);margin-bottom:12px;display:flex;gap:10px;align-items:center}
+.figure .cap::before{content:"FIG";color:var(--brass);font-weight:600}
+.mermaid{display:flex;justify-content:center;font-family:"Archivo",sans-serif !important}
+
+/* persona / feature cards grid */
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:22px 0}
+.card{background:var(--white);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
+.card h4{margin:0 0 4px;font-size:16px}
+.card .role{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass-deep);margin-bottom:8px}
+.card ul{font-size:14.5px;font-family:"Archivo",sans-serif;margin:6px 0 0;padding-left:18px}
+.card li{margin-bottom:4px}
+
+/* footer */
+footer{background:var(--ink);color:#9FB0C4;padding:40px 0;margin-top:60px;font-family:"IBM Plex Mono",monospace;font-size:13px}
+footer b{color:#E7DCC0;font-weight:500}
+
+/* responsive */
+@media(max-width:760px){
+  body{font-size:16.5px}
+  .tocgrid,.grid2{grid-template-columns:1fr}
+  .seal{display:none}
+  .cover .wrap{padding:60px 22px 48px}
+}
+@media print{
+  .toc{break-after:page}
+  section.sec{break-inside:avoid-page}
+  a{color:var(--ink);border:none}
+  body{font-size:11pt}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<header class="cover">
+  <div class="seal"><span>KSP · SCRB<br>DATATHON<br>2026</span></div>
+  <div class="wrap">
+    <div class="classif">Technical Report · Challenge 01 · For Demo-Day Jury</div>
+    <h1>Intelligent Conversational AI for the Karnataka State Police Crime Database</h1>
+    <p class="sub">A production-grade, Catalyst-native blueprint for natural-language access to crime intelligence across 1,100+ police stations — engineered for officers, investigators, analysts and administrators.</p>
+    <div class="metarow">
+      <span>Host: <b>Karnataka State Police · SCRB</b></span>
+      <span>Platform mandate: <b>Zoho Catalyst</b></span>
+      <span>Prize: <b>₹2.5L (per challenge)</b></span>
+      <span>Doc class: <b>Solution Architecture + Strategy</b></span>
+    </div>
+    <div class="pillrow">
+      <span class="pill">Agentic RAG</span>
+      <span class="pill">Knowledge Graph</span>
+      <span class="pill">Multilingual · Kannada-first</span>
+      <span class="pill">Explainable · Audited</span>
+      <span class="pill">QuickML · Zia · Circuits</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ TOC ============ -->
+<nav class="toc">
+  <div class="wrap">
+    <h2>Contents — 15 Sections</h2>
+    <div class="tocgrid">
+      <a href="#s0"><span class="n">00</span> Executive Summary</a>
+      <a href="#s1"><span class="n">01</span> Problem Understanding</a>
+      <a href="#s2"><span class="n">02</span> Stakeholder &amp; Persona Analysis</a>
+      <a href="#s3"><span class="n">03</span> Existing Solutions Research</a>
+      <a href="#s4"><span class="n">04</span> Crime Database Architecture</a>
+      <a href="#s5"><span class="n">05</span> Conversational AI Design</a>
+      <a href="#s6"><span class="n">06</span> Agentic AI Architecture</a>
+      <a href="#s7"><span class="n">07</span> RAG System Research</a>
+      <a href="#s8"><span class="n">08</span> Knowledge Graph Design</a>
+      <a href="#s9"><span class="n">09</span> Multilingual AI Research</a>
+      <a href="#s10"><span class="n">10</span> Crime Analytics</a>
+      <a href="#s11"><span class="n">11</span> Security &amp; Compliance</a>
+      <a href="#s12"><span class="n">12</span> Evaluation Metrics</a>
+      <a href="#s13"><span class="n">13</span> Winning Hackathon Strategy</a>
+      <a href="#s14"><span class="n">14</span> MVP Roadmap</a>
+      <a href="#s15"><span class="n">15</span> Final Recommendation</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+<!-- ============ 00 EXEC ============ -->
+<section class="sec" id="s0">
+  <div class="eyebrow">§00 // Executive Summary</div>
+  <h2>One officer, one question, one trustworthy answer</h2>
+  <p class="lede">Today an SCRB analyst who wants "all two-wheeler thefts in Bengaluru East linked to a repeat offender in the last six months" must know the schema, write SQL or wait on a dashboard team, and still cannot see the hidden links between FIRs, phones and vehicles. We replace that with a conversation — in Kannada or English — that returns an explainable, source-cited answer in seconds.</p>
+
+  <p>This report specifies a <strong>Catalyst-native, agentic Retrieval-Augmented Generation (RAG) system</strong> over the SCRB crime corpus. It is deliberately two-layered: we present the <em>state-of-the-art landscape</em> (so the jury sees we know the field), and then the <em>exact Zoho Catalyst services</em> each capability maps to — because deployment on Catalyst is mandatory and third-party substitution where a Catalyst service exists can invalidate the submission.</p>
+
+  <div class="dossier brass">
+    <div class="tag">The thesis in one line</div>
+    <p style="margin:0">A <strong>planner-orchestrated multi-agent RAG</strong> that fuses <strong>structured crime data (Catalyst Data Store)</strong>, <strong>unstructured case documents (QuickML RAG / Knowledge Base)</strong> and a <strong>relationship graph</strong>, served through <strong>Qwen 2.5-14B (QuickML LLM Serving)</strong> with <strong>Kannada-first multilingual</strong> handling and <strong>citation-level explainability</strong> on every answer.</p>
+  </div>
+
+  <h3>What wins this challenge</h3>
+  <ol>
+    <li><strong>Explainability over magic.</strong> Every answer shows the FIRs, columns and graph edges it used. Police evidence standards demand traceability; QuickML RAG already exposes a "response breakdown." We make that the centrepiece, not an afterthought.</li>
+    <li><strong>Hidden-link discovery.</strong> A knowledge graph that surfaces the connection between a phone number, three FIRs and a vehicle is the "wow" no dashboard can match.</li>
+    <li><strong>Kannada-first.</strong> A beat officer querying in spoken Kannada and getting a cited Kannada answer is the single most demo-able proof of real-world fit for Karnataka.</li>
+    <li><strong>Deployability.</strong> Running live on Catalyst at demo day — not a localhost mock — is the credibility multiplier with government stakeholders.</li>
+  </ol>
+
+  <div class="figure">
+    <div class="cap">High-level solution architecture</div>
+    <pre class="mermaid">
+flowchart TB
+  U["Officer / Analyst<br/>(Kannada · English · Hindi · Tamil · Telugu)"] --> CH["Conversational UI<br/>Catalyst Web Hosting + Auth"]
+  CH --> GW["API Gateway<br/>throttle · authZ · audit"]
+  GW --> ORCH["Orchestrator (Catalyst Circuits)<br/>plan → route → compose"]
+  ORCH --> LANG["Translation Agent<br/>Zia OCR/lang + bridge"]
+  ORCH --> QRY["Query Agent → SQL/filter"]
+  ORCH --> RET["Retrieval Agent (RAG)"]
+  ORCH --> INV["Investigation Agent (graph)"]
+  ORCH --> PAT["Crime-Pattern Agent (ML)"]
+  QRY --> DS[("Catalyst Data Store<br/>FIR · persons · vehicles · calls")]
+  RET --> KB[("QuickML RAG / Knowledge Base<br/>FIR text · charge sheets · orders")]
+  INV --> GRAPH[("Graph model in Data Store<br/>+ graph analytics in Functions/QuickML")]
+  PAT --> MLP["QuickML pipelines<br/>DBSCAN · XGBoost · anomaly"]
+  QRY --> COMP
+  RET --> COMP
+  INV --> COMP
+  PAT --> COMP
+  LANG --> COMP
+  COMP["Compose + Verify Agent<br/>Qwen 2.5-14B (LLM Serving)"] --> EXP["Explainable answer<br/>+ citations + provenance"]
+  EXP --> CH
+  GW -.audit.-> LOG[("Immutable audit log<br/>Data Store + Stratus")]
+    </pre>
+  </div>
+</section>
+
+<!-- ============ 01 PROBLEM ============ -->
+<section class="sec" id="s1">
+  <div class="eyebrow">§01 // Problem Understanding</div>
+  <h2>Why querying crime data is still painfully hard</h2>
+
+  <p>The SCRB runs a large, continuously growing repository drawn from 1,100+ stations. As the challenge brief itself states, current systems lean on static dashboards and manual queries, which caps deep analysis and real-time insight. That single sentence hides several distinct bottlenecks:</p>
+
+  <h3>1.1 The querying bottleneck</h3>
+  <ul>
+    <li><strong>Schema literacy is a gatekeeper.</strong> SQL and BI dashboards require knowing table names, join keys and code lists. A station-house officer should not need to know that "MO" lives in a separate modus-operandi table.</li>
+    <li><strong>Dashboards answer yesterday's questions.</strong> A fixed dashboard answers the questions its designer anticipated. Investigations generate <em>novel</em> questions hourly ("who else called this number the night of the burglary?").</li>
+    <li><strong>Data is siloed by record type.</strong> FIRs, charge sheets, criminal histories, vehicle records and call data live in different systems and formats; cross-record questions require manual stitching.</li>
+    <li><strong>Unstructured text is invisible to SQL.</strong> The richest evidence — the FIR narrative, witness statements, charge-sheet reasoning — is free text that relational queries cannot search semantically.</li>
+  </ul>
+
+  <h3>1.2 The multilingual policing problem (India-specific)</h3>
+  <p>FIRs in Karnataka are frequently registered in Kannada; supervisory and inter-state communication often happens in English or Hindi; border districts see Tamil, Telugu and Marathi. A national crime system that only "speaks" English excludes the beat constable who is closest to the ground truth. Mixed-script and transliterated entries (a name written both in Kannada and Roman script) further fragment search.</p>
+
+  <h3>1.3 The historical-record problem</h3>
+  <p>Decades of FIRs, charge sheets and case records exist as scanned PDFs and legacy formats. They are effectively unsearchable: an investigator cannot ask "show similar MO cases from the last ten years" because the corpus was never indexed for semantic retrieval.</p>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Real-world reference points — what other jurisdictions learned</caption>
+    <thead><tr><th>Jurisdiction</th><th>System / lesson</th><th>Takeaway for KSP</th></tr></thead>
+    <tbody>
+      <tr><td><strong>India</strong></td><td>CCTNS / ICJS link FIRs, courts, prisons and forensics nationally; adoption showed integration value but also that officers still query via rigid forms.</td><td>The data backbone exists — the missing layer is natural-language access on top of it.</td></tr>
+      <tr><td><strong>USA</strong></td><td>Predictive-policing pilots (e.g. PredPol-style and the NYPD's analytics) drew strong civil-liberties criticism over bias and opacity.</td><td>Lead with <em>explainability and audit</em>, position analytics as decision-support, never autonomous action.</td></tr>
+      <tr><td><strong>UK</strong></td><td>Police National Computer + National Data Analytics Solution; reviews stressed data-quality and transparency duties.</td><td>Answer quality is bounded by data quality — surface confidence and provenance.</td></tr>
+      <tr><td><strong>Singapore</strong></td><td>Integrated, sensor-and-data-rich policing with strong central governance.</td><td>Tight RBAC and central audit make integration politically acceptable.</td></tr>
+      <tr><td><strong>Interpol</strong></td><td>I-24/7 network and analytical files connect member states for cross-border entity matching.</td><td>Entity resolution (same person, many spellings) is the core hard problem — design for it early.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="risk">
+    <div class="tag">Risk framing — set this tone with the jury</div>
+    <p style="margin:0">Every international predictive-policing programme that drew backlash did so over <strong>opacity and bias</strong>. Our differentiator is not a bigger model — it is a system that always shows its work and never takes an enforcement action on its own.</p>
+  </div>
+</section>
+
+<!-- ============ 02 PERSONAS ============ -->
+<section class="sec" id="s2">
+  <div class="eyebrow">§02 // Stakeholder &amp; Persona Analysis</div>
+  <h2>Eight users, eight very different questions</h2>
+  <p class="lede">The system must serve a constable with a phone in a lane and a Senior Superintendent reading a district trend report. Same engine, different surface, different access rights.</p>
+
+  <div class="grid2">
+    <div class="card"><div class="role">Field · Tier 1</div><h4>Beat Constable</h4>
+      <ul><li><b>Workflow:</b> patrol, verification, first response.</li><li><b>Needs:</b> instant person/vehicle lookup, BOLO alerts.</li><li><b>Pain:</b> no field access to records; radios the station.</li><li><b>AI opportunity:</b> voice query in Kannada on mobile → cited summary.</li></ul></div>
+    <div class="card"><div class="role">Station · Tier 1</div><h4>Station House Officer (SHO)</h4>
+      <ul><li><b>Workflow:</b> FIR registration, station caseload, daily diary.</li><li><b>Needs:</b> jurisdiction caseload, pending actions, similar FIRs.</li><li><b>Pain:</b> manual register reconciliation across records.</li><li><b>AI opportunity:</b> "summarise today's FIRs and flag repeats."</li></ul></div>
+    <div class="card"><div class="role">Investigation · Tier 2</div><h4>Inspector / IO</h4>
+      <ul><li><b>Workflow:</b> active investigation, evidence assembly.</li><li><b>Needs:</b> cross-FIR links, suspect history, MO matches.</li><li><b>Pain:</b> stitching phones, vehicles, addresses by hand.</li><li><b>AI opportunity:</b> graph link-discovery + auto case brief.</li></ul></div>
+    <div class="card"><div class="role">Specialist · Tier 2</div><h4>Crime Branch Officer</h4>
+      <ul><li><b>Workflow:</b> serious / organised / serial crime.</li><li><b>Needs:</b> network maps, repeat-offender clusters.</li><li><b>Pain:</b> no tool to reveal hidden criminal networks.</li><li><b>AI opportunity:</b> community detection + link prediction.</li></ul></div>
+    <div class="card"><div class="role">Analysis · Tier 3</div><h4>Intelligence Analyst</h4>
+      <ul><li><b>Workflow:</b> trend, hotspot and threat analysis.</li><li><b>Needs:</b> spatio-temporal clustering, ad-hoc cohorts.</li><li><b>Pain:</b> waits on BI team for every new cut.</li><li><b>AI opportunity:</b> self-serve analytics in natural language.</li></ul></div>
+    <div class="card"><div class="role">Command · Tier 4</div><h4>Senior Superintendent (SP)</h4>
+      <ul><li><b>Workflow:</b> district command, resourcing, accountability.</li><li><b>Needs:</b> district KPIs, clearance rates, emerging risks.</li><li><b>Pain:</b> static reports, lagging signals.</li><li><b>AI opportunity:</b> "brief me on this week's district risks."</li></ul></div>
+    <div class="card"><div class="role">Cyber · Tier 2</div><h4>Cyber Crime Officer</h4>
+      <ul><li><b>Workflow:</b> financial fraud, online offences.</li><li><b>Needs:</b> link a phone/UPI/account across complaints.</li><li><b>Pain:</b> fraud rings span many FIRs and districts.</li><li><b>AI opportunity:</b> "all fraud linked to this number" → graph.</li></ul></div>
+    <div class="card"><div class="role">Response · Tier 1</div><h4>Emergency Response (112)</h4>
+      <ul><li><b>Workflow:</b> live dispatch, situational awareness.</li><li><b>Needs:</b> address history, prior incidents, nearby risk.</li><li><b>Pain:</b> no instant context at point of dispatch.</li><li><b>AI opportunity:</b> "what's the history at this address?"</li></ul></div>
+  </div>
+
+  <div class="dossier teal">
+    <div class="tag">Design consequence</div>
+    <p style="margin:0">Personas differ on two axes the architecture must respect: <strong>access rights</strong> (a constable must never see what a Crime Branch officer sees) and <strong>answer shape</strong> (a one-line field fact vs. a district trend brief). Both are handled by the <em>Orchestrator + RBAC</em> layer, not by separate apps.</p>
+  </div>
+</section>
+
+<!-- ============ 03 EXISTING ============ -->
+<section class="sec" id="s3">
+  <div class="eyebrow">§03 // Existing Solutions Research</div>
+  <h2>What the incumbents do — and where the gap is</h2>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Law-enforcement intelligence platforms — comparative scan</caption>
+    <thead><tr><th>Platform</th><th>Strengths</th><th>Weaknesses</th><th>Typical stack</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Palantir Gotham</strong></td><td>Best-in-class entity fusion, link analysis, access control; battle-tested at scale.</td><td>Very high cost, heavy onboarding, "black-box" perception, limited natural-language self-serve.</td><td>Proprietary ontology, Java/TS, on-prem/cloud.</td></tr>
+      <tr><td><strong>IBM i2 Analyst's Notebook</strong></td><td>Gold standard for visual link/timeline charts; analyst-trusted.</td><td>Desktop-bound, manual chart-building, no conversational layer.</td><td>Windows desktop, i2 repository.</td></tr>
+      <tr><td><strong>NICE Investigate</strong></td><td>Digital-evidence management, disclosure workflows.</td><td>Evidence-centric, not a crime-data Q&amp;A engine.</td><td>Cloud SaaS, case management.</td></tr>
+      <tr><td><strong>Interpol analytical files</strong></td><td>Cross-border entity matching, secure exchange.</td><td>Member-state only; not an officer-facing assistant.</td><td>I-24/7 secure network.</td></tr>
+      <tr><td><strong>Oracle Public Safety</strong></td><td>Strong RMS/CAD, records of authority, mature data model.</td><td>Form-and-report driven; limited semantic search.</td><td>Oracle DB, APEX, Java.</td></tr>
+      <tr><td><strong>Microsoft Public Safety</strong></td><td>Azure scale, Copilot direction, ecosystem integration.</td><td>Generic platform; needs heavy customisation per force.</td><td>Azure, Dataverse, Power Platform.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>The white space we occupy</h3>
+  <p>Every incumbent is either an <strong>analyst power-tool</strong> (i2, Gotham) that demands training, or a <strong>records system</strong> (Oracle, NICE) optimised for forms and reports. None offers a <strong>conversational, multilingual, citation-grounded assistant that any rank can use on a phone</strong>. That is precisely the brief — and precisely the gap. Our innovation is not reinventing link analysis; it is making it <em>askable in plain Kannada and explainable on demand</em>, delivered on the mandated Catalyst stack at a fraction of incumbent cost.</p>
+</section>
+
+<!-- ============ 04 DATA ARCH ============ -->
+<section class="sec" id="s4">
+  <div class="eyebrow">§04 // Crime Database Architecture</div>
+  <h2>A unified knowledge model over fragmented sources</h2>
+  <p class="lede">The crime corpus is heterogeneous: structured tables, free-text narratives, scanned legacy PDFs, geo-coordinates and call records. The architecture's first job is to land all of it into a single, queryable, access-controlled model — using Catalyst primitives.</p>
+
+  <h3>4.1 Source inventory and where each lands on Catalyst</h3>
+  <div class="tablewrap">
+  <table>
+    <caption>Data domain → Catalyst storage mapping</caption>
+    <thead><tr><th>Data domain</th><th>Shape</th><th>Catalyst home</th></tr></thead>
+    <tbody>
+      <tr><td>FIR records (structured fields)</td><td>Relational</td><td><span class="mono">Data Store</span> (relational + full-text)</td></tr>
+      <tr><td>FIR narratives, charge sheets, court orders</td><td>Unstructured text</td><td><span class="mono">QuickML Knowledge Base → RAG</span></td></tr>
+      <tr><td>Criminal history / profiles</td><td>Relational + links</td><td><span class="mono">Data Store</span> + graph tables</td></tr>
+      <tr><td>Vehicle registry</td><td>Relational</td><td><span class="mono">Data Store</span></td></tr>
+      <tr><td>Call detail records (CDR)</td><td>High-volume relational</td><td><span class="mono">Data Store</span> / <span class="mono">NoSQL</span> for scale</td></tr>
+      <tr><td>CCTV metadata (not footage)</td><td>Semi-structured</td><td><span class="mono">NoSQL</span> + <span class="mono">Stratus</span> (blobs)</td></tr>
+      <tr><td>Geo-spatial crime points</td><td>Lat/long + attributes</td><td><span class="mono">Data Store</span> (indexed) + QuickML clustering</td></tr>
+      <tr><td>Missing-person records</td><td>Relational + images</td><td><span class="mono">Data Store</span> + <span class="mono">Stratus</span> + Zia Face</td></tr>
+      <tr><td>Cybercrime complaints</td><td>Structured + text</td><td><span class="mono">Data Store</span> + RAG</td></tr>
+      <tr><td>Court case records</td><td>Text + status</td><td><span class="mono">Data Store</span> + RAG</td></tr>
+      <tr><td>Scanned legacy FIRs/PDFs</td><td>Images</td><td><span class="mono">Zia OCR</span> → text → RAG + Data Store</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>4.2 The unified knowledge model</h3>
+  <p>Three layers sit over these sources, all addressable by the agents:</p>
+  <ul>
+    <li><strong>Structured layer</strong> — normalised entities and facts in Data Store, queried by the Query Agent for precise, aggregatable answers ("how many", "in this period", "in this division").</li>
+    <li><strong>Semantic layer</strong> — chunked, embedded case text in the QuickML Knowledge Base, retrieved by the Retrieval Agent for "what happened" / "find similar" questions.</li>
+    <li><strong>Relationship layer</strong> — a graph of entities and edges (modelled as adjacency tables in Data Store, traversed by graph analytics in Functions/QuickML) for "how are these connected" questions.</li>
+  </ul>
+
+  <div class="figure">
+    <div class="cap">Ingestion &amp; unified data flow</div>
+    <pre class="mermaid">
+flowchart LR
+  subgraph SRC[Sources]
+    A1[Structured FIR feeds]
+    A2[Scanned legacy PDFs]
+    A3[CDR / vehicle / court feeds]
+  end
+  A2 --> OCR["Zia OCR<br/>(10 Indian languages)"]
+  A1 --> ING["Ingestion Functions<br/>(Catalyst Signals + Event Functions)"]
+  A3 --> ING
+  OCR --> ING
+  ING --> CLEAN["Normalise · de-dup ·<br/>entity-resolve"]
+  CLEAN --> DS[("Data Store<br/>structured + graph tables")]
+  CLEAN --> CHUNK["Chunk + index"]
+  CHUNK --> KB[("QuickML Knowledge Base<br/>RAG index")]
+  CLEAN --> GEO["Geo + temporal features"]
+  GEO --> ML["QuickML pipelines<br/>(hotspots · patterns)"]
+  DS --> SERVE((Serving layer))
+  KB --> SERVE
+  ML --> SERVE
+    </pre>
+  </div>
+
+  <div class="dossier">
+    <div class="tag">Honest constraint — and how we handle it</div>
+    <p style="margin:0">Catalyst does not expose a native graph database. We therefore model the relationship layer as <strong>adjacency/edge tables in Data Store</strong> and run traversal, community detection and link-prediction as <strong>QuickML pipelines and Catalyst Functions</strong>. This keeps us inside the mandate while still delivering true network analytics. We document this trade-off openly — judges reward teams that know their platform's edges.</p>
+  </div>
+</section>
+
+<!-- ============ 05 CONVERSATIONAL ============ -->
+<section class="sec" id="s5">
+  <div class="eyebrow">§05 // Conversational AI Design</div>
+  <h2>How an officer actually talks to the system</h2>
+  <p class="lede">The interface is a conversation, not a query box. It must understand intent, plan retrieval, hold context across turns, and answer in a way an officer can act on and a court can trust.</p>
+
+  <h3>5.1 The query types we support</h3>
+  <span class="q">Show all burglary cases in Bengaluru East in the last 6 months</span>
+  <span class="q">Find repeat offenders associated with vehicle theft</span>
+  <span class="q">Summarise all cyber-fraud complaints linked to phone +91-9XXXXXXXXX</span>
+  <span class="q">Show crime hotspots near MG Road in the last 90 days</span>
+  <span class="q">What similar cases exist for this FIR?</span>
+  <p style="margin-top:14px">These map to four intent families, each routed differently: <strong>aggregate/filter</strong> (→ Query Agent), <strong>semantic/similar</strong> (→ Retrieval Agent), <strong>relational/link</strong> (→ Investigation Agent), and <strong>analytic/trend</strong> (→ Crime-Pattern Agent).</p>
+
+  <h3>5.2 The understanding pipeline</h3>
+  <div class="figure">
+    <div class="cap">Natural-language → action → explainable answer</div>
+    <pre class="mermaid">
+flowchart LR
+  IN["Utterance<br/>(any of 5 languages)"] --> NLU["Language detect +<br/>normalise (Zia/bridge)"]
+  NLU --> INT["Intent + entity<br/>recognition"]
+  INT --> SLOT["Slot fill<br/>(time · place · type · id)"]
+  SLOT --> CTX{"Needs prior<br/>context?"}
+  CTX -- yes --> MEM[("Session memory<br/>Catalyst Cache")]
+  CTX -- no --> PLAN
+  MEM --> PLAN["Query plan<br/>(which agents, what order)"]
+  PLAN --> EXEC["Execute agents"]
+  EXEC --> COMP["Compose answer<br/>Qwen 2.5-14B"]
+  COMP --> CITE["Attach citations<br/>+ confidence"]
+  CITE --> OUT["Answer in user's language"]
+    </pre>
+  </div>
+
+  <h3>5.3 Context, multi-turn and explainability</h3>
+  <ul>
+    <li><strong>Multi-turn context.</strong> QuickML's RAG does not retain chat history on its own, so we hold conversation state in <span class="mono">Catalyst Cache</span> keyed to the session, letting "now narrow that to two-wheelers" resolve against the previous turn.</li>
+    <li><strong>Context retention scope.</strong> The active entities (the FIR, the suspect, the time window) are carried forward; the orchestrator decides what is still relevant.</li>
+    <li><strong>Explainable responses.</strong> Every answer renders three things: the <em>plain-language answer</em>, the <em>sources</em> (FIR IDs, table rows, graph edges) via QuickML's response-breakdown, and a <em>confidence/coverage</em> note when data is partial.</li>
+  </ul>
+
+  <div class="dossier brass">
+    <div class="tag">Demo gold</div>
+    <p style="margin:0">Show a follow-up turn live: ask the broad question, then say "only the ones near Indiranagar." The system narrowing correctly using remembered context is the moment judges believe it is a real assistant, not a search box.</p>
+  </div>
+</section>
+
+<!-- ============ 06 AGENTIC ============ -->
+<section class="sec" id="s6">
+  <div class="eyebrow">§06 // Agentic AI Architecture</div>
+  <h2>A planner-orchestrated team of specialists</h2>
+  <p class="lede">A single prompt cannot reliably do filtering, semantic search, graph traversal and report writing at once. We split the work into focused agents coordinated by an orchestrator built on Catalyst Circuits.</p>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Agent roster — responsibility, tools, output</caption>
+    <thead><tr><th>Agent</th><th>Responsibility</th><th>Catalyst tools</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Orchestrator</strong></td><td>Reads intent, builds the plan, routes to agents, sequences and merges results.</td><td>Circuits (multi-step, branching, parallel)</td></tr>
+      <tr><td><strong>Query Agent</strong></td><td>NL → structured query (filters, aggregates, joins) over crime tables.</td><td>Functions + Data Store</td></tr>
+      <tr><td><strong>Retrieval Agent</strong></td><td>Semantic retrieval of case text; "find similar" / "what happened".</td><td>QuickML RAG / Knowledge Base</td></tr>
+      <tr><td><strong>Investigation Agent</strong></td><td>Graph traversal to surface hidden links between entities.</td><td>Functions + graph tables (+ QuickML link-prediction)</td></tr>
+      <tr><td><strong>Crime-Pattern Agent</strong></td><td>Hotspots, trends, repeat-offender and anomaly detection.</td><td>QuickML pipelines (DBSCAN, XGBoost, anomaly)</td></tr>
+      <tr><td><strong>Report-Generation Agent</strong></td><td>Composes briefs, case summaries, PDFs for officers.</td><td>Qwen LLM Serving + SmartBrowz (PDF)</td></tr>
+      <tr><td><strong>Evidence-Verification Agent</strong></td><td>Checks every claim resolves to a real source; flags low-confidence.</td><td>Functions + RAG response-breakdown</td></tr>
+      <tr><td><strong>Translation Agent</strong></td><td>Detects language, normalises script, returns answer in user's language.</td><td>Zia OCR/language + bridge</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>6.1 Communication flow &amp; memory</h3>
+  <ul>
+    <li><strong>Orchestration:</strong> Circuits defines the workflow as steps with branches and parallel fan-out — the Query and Retrieval agents can run concurrently, then merge.</li>
+    <li><strong>Short-term memory:</strong> per-session state in Catalyst Cache (active entities, last result set).</li>
+    <li><strong>Long-term memory:</strong> the corpus itself (Data Store + Knowledge Base) plus an audit log of past queries.</li>
+    <li><strong>Tool use:</strong> agents are Catalyst Functions exposing typed inputs/outputs; the orchestrator passes structured messages, not raw prose, between them.</li>
+  </ul>
+
+  <div class="figure">
+    <div class="cap">Agent orchestration on Catalyst Circuits</div>
+    <pre class="mermaid">
+flowchart TB
+  O["Orchestrator (Circuits)"] --> P{"Intent class?"}
+  P -- aggregate --> Q["Query Agent"]
+  P -- similar --> R["Retrieval Agent"]
+  P -- link --> I["Investigation Agent"]
+  P -- trend --> C["Crime-Pattern Agent"]
+  P -- mixed --> PAR["Parallel fan-out: Q + R + I"]
+  Q --> M["Merge"]
+  R --> M
+  I --> M
+  C --> M
+  PAR --> M
+  M --> V["Evidence-Verification Agent"]
+  V --> G["Report-Generation Agent"]
+  G --> T["Translation Agent"]
+  T --> ANS["Explainable answer"]
+    </pre>
+  </div>
+</section>
+
+<!-- ============ 07 RAG ============ -->
+<section class="sec" id="s7">
+  <div class="eyebrow">§07 // RAG System Research</div>
+  <h2>A law-enforcement-grade retrieval system</h2>
+  <p class="lede">Generic RAG returns plausible text. Police RAG must return <em>verifiable</em> text — every sentence traceable to an FIR, a row or a document — and must combine semantic search with exact structured filters.</p>
+
+  <h3>7.1 The hybrid retrieval principle</h3>
+  <p>Crime questions are rarely purely semantic. "Burglaries in Bengaluru East in the last six months" needs an <strong>exact filter</strong> (place, type, date) before any semantic ranking. So the system runs <strong>hybrid retrieval</strong>: the Query Agent applies hard filters in Data Store; the Retrieval Agent does semantic search over the matching case text; results are fused and re-ranked before generation. QuickML's managed RAG already performs semantic search → re-rank → grounded generation with a citation breakdown, which we use directly and wrap with our structured pre-filter.</p>
+
+  <h3>7.2 The landscape (what we'd reach for off-platform)</h3>
+  <div class="tablewrap">
+  <table>
+    <caption>Vector / search engines — reference comparison</caption>
+    <thead><tr><th>Engine</th><th>Strength</th><th>Trade-off</th><th>Fit (off-Catalyst)</th></tr></thead>
+    <tbody>
+      <tr><td>Pinecone</td><td>Managed, easy scale</td><td>Cloud-only, cost at scale</td><td><span class="badge b-md">Prototype</span></td></tr>
+      <tr><td>Weaviate</td><td>Hybrid + modules + graph-ish</td><td>Ops overhead self-hosted</td><td><span class="badge b-hi">Strong</span></td></tr>
+      <tr><td>Qdrant</td><td>Fast, Rust, great filtering</td><td>Younger ecosystem</td><td><span class="badge b-hi">Strong</span></td></tr>
+      <tr><td>Milvus</td><td>Billion-scale</td><td>Heavyweight to run</td><td><span class="badge b-md">Large-scale only</span></td></tr>
+      <tr><td>Elasticsearch</td><td>Mature hybrid (BM25 + vectors)</td><td>Tuning complexity</td><td><span class="badge b-hi">Strong (hybrid)</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="dossier brass">
+    <div class="tag">Recommended stack — Catalyst-native (the one that counts)</div>
+    <p style="margin:0">Because deployment is mandated on Catalyst and a managed RAG service exists, the <strong>production retrieval stack is QuickML Knowledge Base + RAG</strong> (semantic search, re-rank, Qwen 2.5-14B generation, citation breakdown) for unstructured text, <strong>+ Catalyst Data Store full-text and relational queries</strong> for structured pre-filtering. The vendor engines above are presented to demonstrate landscape literacy and as the contingency stack if a self-managed index were ever permitted — not as the submission's runtime.</p>
+  </div>
+
+  <div class="risk">
+    <div class="tag">Two real limitations to engineer around</div>
+    <p style="margin:0">(1) QuickML RAG currently <strong>does not persist chat history</strong> — we add multi-turn memory in the app layer via Cache. (2) Retrieval quality depends on <strong>chunking and entity-tagging</strong> at ingestion — we invest there (FIR-aware chunking, entity tags) rather than expecting the index to do it for us.</p>
+  </div>
+</section>
+
+<!-- ============ 08 KG ============ -->
+<section class="sec" id="s8">
+  <div class="eyebrow">§08 // Knowledge Graph Design</div>
+  <h2>Turning records into a network of relationships</h2>
+  <p class="lede">The questions only a graph can answer — "who connects these three FIRs?", "what's the hidden link between this phone and that vehicle?" — are the investigative heart of the system.</p>
+
+  <h3>8.1 Entities and relationships</h3>
+  <div class="figure">
+    <div class="cap">Crime knowledge-graph schema (illustrative)</div>
+    <pre class="mermaid">
+flowchart LR
+  PER(("Person")) -->|suspected_in| FIR(("FIR / Case"))
+  VIC(("Victim")) -->|appears_in| FIR
+  WIT(("Witness")) -->|appears_in| FIR
+  PER -->|owns| VEH(("Vehicle"))
+  PER -->|uses| PH(("Phone"))
+  PH -->|called| PH2(("Phone"))
+  PER -->|located_at| ADDR(("Address"))
+  FIR -->|occurred_at| LOC(("Location"))
+  PER -->|holds| ACC(("Bank Account"))
+  PER -->|member_of| ORG(("Organisation"))
+  FIR -->|related_to| FIR2(("FIR / Case"))
+  PER -->|knows| PER2(("Person"))
+    </pre>
+  </div>
+  <p><strong>Entities:</strong> Person, Criminal, Victim, Witness, FIR, Case, Vehicle, Phone Number, Address, Location, Bank Account, Organisation. <strong>Relationships:</strong> knows, owns, appears_in, called, located_at, related_to, suspected_in.</p>
+
+  <h3>8.2 How graph analytics uncovers networks</h3>
+  <ul>
+    <li><strong>Entity resolution</strong> first: collapse "Suresh K", "S. Kumar" and the Kannada spelling into one node — the single highest-leverage step for accuracy.</li>
+    <li><strong>Path-finding</strong> reveals indirect links (suspect → phone → co-called number → second FIR).</li>
+    <li><strong>Community detection</strong> exposes organised groups and fraud rings.</li>
+    <li><strong>Centrality</strong> ranks who is structurally important in a network (the broker, not just the loudest name).</li>
+    <li><strong>Link prediction</strong> suggests probable-but-unrecorded connections for investigators to verify (never to act on automatically).</li>
+  </ul>
+
+  <div class="dossier">
+    <div class="tag">Catalyst implementation</div>
+    <p style="margin:0">Nodes and edges live as <strong>Data Store tables</strong>; traversal and the analytics above run as <strong>Catalyst Functions</strong> (path/community/centrality) and <strong>QuickML</strong> (link-prediction as a classification pipeline). For demo scale this is fast; for production scale we document a path to an external graph engine if the mandate ever relaxes.</p>
+  </div>
+</section>
+
+<!-- ============ 09 MULTILINGUAL ============ -->
+<section class="sec" id="s9">
+  <div class="eyebrow">§09 // Multilingual AI Research</div>
+  <h2>Kannada-first, five languages deep</h2>
+  <p class="lede">For Karnataka, Kannada is not a feature — it is the product. The system must understand and answer in Kannada, English, Hindi, Tamil and Telugu, across typed and spoken input and mixed scripts.</p>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Model options for Indian-language understanding</caption>
+    <thead><tr><th>Model family</th><th>Indian-language fit</th><th>Notes for this build</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Qwen 2.5-14B</strong> <span class="badge b-hi">On-platform</span></td><td>Strong general multilingual; serviceable Hindi, decent Tamil/Telugu; weaker pure Kannada generation.</td><td>Served natively by QuickML — our generation model.</td></tr>
+      <tr><td>Sarvam</td><td>Purpose-built for Indian languages incl. Kannada.</td><td>Best Kannada quality, but off-platform — contingency / bridge only.</td></tr>
+      <tr><td>AI4Bharat (IndicTrans2, etc.)</td><td>Top open Indian translation/ASR.</td><td>Ideal translation bridge if self-hosting allowed.</td></tr>
+      <tr><td>IndicBERT</td><td>Strong for classification/NER, not generation.</td><td>Good for intent/entity tagging.</td></tr>
+      <tr><td>Llama / Gemini / GPT</td><td>Capable but variable on Kannada; closed (Gemini/GPT).</td><td>Reference baselines only.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>9.1 Recommended multilingual architecture</h3>
+  <p>A <strong>translate–reason–translate bridge</strong> that stays on-platform:</p>
+  <ol>
+    <li><strong>Detect &amp; normalise</strong> the input language and script (Zia handles 10 Indian languages incl. for OCR of scanned Kannada FIRs).</li>
+    <li><strong>Pivot to English</strong> for the heavy reasoning step (where Qwen is strongest and entity matching is most reliable), keeping a copy of the original for fidelity.</li>
+    <li><strong>Reason &amp; retrieve</strong> over the corpus.</li>
+    <li><strong>Generate the answer, then render it back in the user's language</strong>, preserving names/IDs verbatim so nothing is mistranslated.</li>
+  </ol>
+
+  <div class="risk">
+    <div class="tag">The honest Kannada gap — and the winning move</div>
+    <p style="margin:0">Qwen's native Kannada generation is the weakest link. The defensible solution within the mandate is the <strong>English-pivot bridge above</strong>; if the organisers permit a self-hosted helper, slotting in an <strong>AI4Bharat/Sarvam translation model on AppSail</strong> lifts Kannada quality sharply. Naming this trade-off openly (rather than pretending Qwen is perfect in Kannada) is itself a credibility win with a Karnataka jury.</p>
+  </div>
+</section>
+<!-- ============ 10 ANALYTICS ============ -->
+<section class="sec" id="s10">
+  <div class="eyebrow">§10 // Crime Analytics</div>
+  <h2>From records to foresight — responsibly</h2>
+  <p class="lede">Analytics turn the same data into hotspots, trends and network insight. Each technique below is framed as decision-support for an officer, never as automated judgement about a person.</p>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Analytics tasks → algorithms → platform</caption>
+    <thead><tr><th>Task</th><th>Algorithm</th><th>Advantage</th><th>Risk to manage</th></tr></thead>
+    <tbody>
+      <tr><td>Hotspot detection</td><td><span class="mono">DBSCAN / HDBSCAN</span></td><td>Finds arbitrary-shaped clusters, no preset count, handles noise.</td><td>Reflects reporting bias, not true crime.</td></tr>
+      <tr><td>Repeat-offender / risk scoring</td><td><span class="mono">XGBoost / Random Forest</span></td><td>Strong on tabular data; feature importance &amp; SHAP explainability.</td><td>Must stay advisory; audit for bias.</td></tr>
+      <tr><td>Temporal trends</td><td>Time-series (QuickML)</td><td>Surfaces seasonality and shifts.</td><td>Correlation ≠ causation.</td></tr>
+      <tr><td>Network analysis</td><td><span class="mono">GNN / community detection</span></td><td>Reveals organised structures.</td><td>Guilt-by-association danger — verify.</td></tr>
+      <tr><td>Hidden links</td><td><span class="mono">Link prediction</span></td><td>Suggests probable connections to check.</td><td>Suggestions, never conclusions.</td></tr>
+      <tr><td>Geographic clustering</td><td>Spatial DBSCAN + grid</td><td>Resource allocation, patrol planning.</td><td>Avoid over-policing flagged areas.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>On Catalyst, these run as <strong>QuickML pipelines</strong> (clustering, classification, anomaly detection, time-series are all native operations) with <strong>SHAP-based model explanation</strong> already provided by QuickML — which we surface to officers so a risk flag always comes with "why".</p>
+
+  <div class="risk">
+    <div class="tag">Predictive policing — the line we draw</div>
+    <p style="margin:0">International experience is unambiguous: predictive policing that targets <em>people</em> invites legitimate civil-liberties objections. We restrict prediction to <strong>resource and pattern support</strong> (where/when to patrol, which cases may be linked) with human officers always in the loop, and we log every analytic output for audit. This is both ethically right and strategically smart in front of a government jury.</p>
+  </div>
+</section>
+
+<!-- ============ 11 SECURITY ============ -->
+<section class="sec" id="s11">
+  <div class="eyebrow">§11 // Security &amp; Compliance</div>
+  <h2>Built for a system of record about citizens</h2>
+  <p class="lede">This handles some of the most sensitive data a state holds. Security is not a section — it is a property of every layer.</p>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Control → implementation on Catalyst</caption>
+    <thead><tr><th>Control</th><th>What it means here</th><th>Catalyst mechanism</th></tr></thead>
+    <tbody>
+      <tr><td>Role-based access control</td><td>A constable, IO and SP see different data and answers.</td><td>Catalyst Authentication + role checks in API Gateway/Functions</td></tr>
+      <tr><td>Zero-trust</td><td>Every request authenticated &amp; authorised, no implicit trust.</td><td>API Gateway in front of all Functions; per-call authZ</td></tr>
+      <tr><td>Encryption</td><td>In transit and at rest.</td><td>Catalyst TLS + managed storage encryption</td></tr>
+      <tr><td>Audit logging</td><td>Who asked what, when, and what was returned — immutable.</td><td>Event Functions → append-only Data Store + Stratus</td></tr>
+      <tr><td>Data privacy / minimisation</td><td>Return only what the role needs; mask PII where possible.</td><td>Field-level policies in the serving layer</td></tr>
+      <tr><td>Retention policies</td><td>Time-bound retention per record class.</td><td>Cron / Job Scheduling for lifecycle jobs</td></tr>
+      <tr><td>CJIS-style discipline</td><td>US CJIS is the reference bar: strict access, audit, encryption, personnel control.</td><td>Mapped onto the controls above + India DPDP alignment</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="dossier teal">
+    <div class="tag">Compliance posture</div>
+    <p style="margin:0">We treat <strong>CJIS</strong> as the design reference for rigor and align operationally with <strong>India's DPDP Act</strong> for citizen data. Two non-negotiables we demo explicitly: <strong>every answer is access-scoped to the asker's role</strong>, and <strong>every query is written to an immutable audit trail</strong>.</p>
+  </div>
+</section>
+
+<!-- ============ 12 METRICS ============ -->
+<section class="sec" id="s12">
+  <div class="eyebrow">§12 // Evaluation Metrics</div>
+  <h2>How we prove it works</h2>
+  <div class="tablewrap">
+  <table>
+    <caption>Metric framework</caption>
+    <thead><tr><th>Dimension</th><th>Metric</th><th>Target signal</th></tr></thead>
+    <tbody>
+      <tr><td>Retrieval accuracy</td><td>Recall@k, Precision@k, MRR over a labelled query set</td><td>Right FIRs/rows surface in top results</td></tr>
+      <tr><td>Response accuracy</td><td>Answer correctness vs. ground truth (human-rated)</td><td>Aggregates and facts are correct</td></tr>
+      <tr><td>Hallucination rate</td><td>% claims not traceable to a source (via verification agent)</td><td>Driven toward zero — the headline metric</td></tr>
+      <tr><td>Investigation usefulness</td><td>Officer task-completion rate; links found vs. baseline</td><td>Real cases progressed faster</td></tr>
+      <tr><td>Query latency</td><td>p50 / p95 end-to-end response time</td><td>Conversational feel (low seconds)</td></tr>
+      <tr><td>Multilingual performance</td><td>Accuracy parity across the 5 languages; Kannada gap tracked</td><td>Kannada within tolerance of English</td></tr>
+      <tr><td>Officer satisfaction</td><td>Post-task rating; would-use-again</td><td>Adoption intent from real users</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The single metric to lead with in the pitch is <strong>hallucination rate</strong>: in a law-enforcement system, a confidently wrong answer is worse than no answer. Our verification agent + citation grounding is the mechanism that drives it down, and we show it as a live number.</p>
+</section>
+
+<!-- ============ 13 WINNING ============ -->
+<section class="sec" id="s13">
+  <div class="eyebrow">§13 // Winning Hackathon Strategy</div>
+  <h2>What makes a jury lean forward</h2>
+  <p class="lede">Judges reward solutions that are innovative, demonstrably real, and deployable. We rank features by impact, difficulty and demo value so the team spends effort where it scores.</p>
+
+  <div class="tablewrap">
+  <table>
+    <caption>Feature prioritisation — build in this order</caption>
+    <thead><tr><th>Feature</th><th>Impact</th><th>Difficulty</th><th>Demo value</th></tr></thead>
+    <tbody>
+      <tr><td>NL query → cited answer (core RAG)</td><td><span class="badge b-hi">High</span></td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Explainability / source breakdown</td><td><span class="badge b-hi">High</span></td><td><span class="badge b-hi">Low</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Kannada voice query → Kannada answer</td><td><span class="badge b-hi">High</span></td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Hidden-link graph discovery</td><td><span class="badge b-hi">High</span></td><td><span class="badge b-lo">High</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Crime hotspot map</td><td><span class="badge b-md">Med</span></td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Multi-turn context memory</td><td><span class="badge b-md">Med</span></td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Auto case-brief PDF (SmartBrowz)</td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">Low</span></td><td><span class="badge b-md">Med</span></td></tr>
+      <tr><td>RBAC by rank (live switch in demo)</td><td><span class="badge b-hi">High</span></td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">High</span></td></tr>
+      <tr><td>Audit-trail viewer</td><td><span class="badge b-md">Med</span></td><td><span class="badge b-hi">Low</span></td><td><span class="badge b-md">Med</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="dossier brass">
+    <div class="tag">The demo narrative (5 beats)</div>
+    <ol style="margin:6px 0 0">
+      <li>Constable asks a question <strong>by voice in Kannada</strong> → cited answer appears.</li>
+      <li>Switch to an Inspector login → <strong>same question, richer data</strong> (RBAC made visible).</li>
+      <li>Ask "what connects these FIRs?" → <strong>graph lights up a hidden link</strong>.</li>
+      <li>Click any claim → <strong>jump to the exact FIR/source</strong> (explainability).</li>
+      <li>One click → <strong>auto-generated case brief PDF</strong>, and the query is in the audit log.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 14 MVP ROADMAP ============ -->
+<section class="sec" id="s14">
+  <div class="eyebrow">§14 // MVP Roadmap</div>
+  <h2>From 48 hours to production</h2>
+
+  <div class="figure">
+    <div class="cap">Three-stage delivery plan</div>
+    <pre class="mermaid">
+flowchart LR
+  S1["STAGE 1 · 48h Hackathon MVP<br/>RAG Q&amp;A + citations + Kannada + 1 graph demo"] --> S2["STAGE 2 · 2-Week Prototype<br/>full agent set · RBAC · hotspots · multi-turn"]
+  S2 --> S3["STAGE 3 · Production<br/>full corpus · audit · DPDP · scale · MLOps"]
+    </pre>
+  </div>
+
+  <h3>Stage 1 — 48-hour MVP</h3>
+  <ul>
+    <li><strong>Architecture:</strong> Web UI (Catalyst Web Hosting) → Function → QuickML RAG over a sample FIR set + Data Store filter; Cache for one-turn context.</li>
+    <li><strong>Features:</strong> NL query, cited answer, Kannada in/out (bridge), one scripted hidden-link graph, one hotspot map.</li>
+    <li><strong>Team roles:</strong> 1 data/ingestion, 1 RAG/agents, 1 frontend, 1 demo+graph/analytics.</li>
+  </ul>
+  <h3>Stage 2 — 2-week prototype</h3>
+  <ul>
+    <li><strong>Architecture:</strong> Circuits orchestration, full agent roster, RBAC via Auth + Gateway, audit logging.</li>
+    <li><strong>Features:</strong> multi-turn memory, graph analytics (path/community), QuickML hotspot + risk pipelines, auto case-brief PDF.</li>
+  </ul>
+  <h3>Stage 3 — production</h3>
+  <ul>
+    <li><strong>Architecture:</strong> full SCRB corpus ingestion (Signals/Event Functions), retention via Cron, monitoring, evaluation harness, hardened RBAC + DPDP alignment.</li>
+    <li><strong>Features:</strong> all five languages at parity, entity-resolution at scale, MLOps for model/embedding refresh, role-specific surfaces per persona.</li>
+  </ul>
+</section>
+
+<!-- ============ 15 FINAL ============ -->
+<section class="sec" id="s15">
+  <div class="eyebrow">§15 // Final Recommendation</div>
+  <h2>The blueprint, decided</h2>
+
+  <div class="tablewrap">
+  <table>
+    <caption>The recommended stack — at a glance</caption>
+    <thead><tr><th>Layer</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Architecture</strong></td><td>Planner-orchestrated multi-agent RAG (Circuits) over a unified structured + semantic + graph model.</td></tr>
+      <tr><td><strong>AI model</strong></td><td>Qwen 2.5-14B Instruct via QuickML LLM Serving; English-pivot bridge for Kannada-first multilingual.</td></tr>
+      <tr><td><strong>RAG</strong></td><td>QuickML Knowledge Base + RAG (semantic + re-rank + citation) wrapped with Data Store structured pre-filtering = hybrid retrieval.</td></tr>
+      <tr><td><strong>Knowledge graph</strong></td><td>Edge/adjacency tables in Data Store; traversal + community + link-prediction in Functions/QuickML.</td></tr>
+      <tr><td><strong>Analytics</strong></td><td>QuickML pipelines (DBSCAN hotspots, XGBoost risk, anomaly, time-series) with SHAP explainability.</td></tr>
+      <tr><td><strong>Security</strong></td><td>Auth + API Gateway zero-trust, role-scoped answers, immutable audit log, encryption, CJIS-referenced / DPDP-aligned.</td></tr>
+      <tr><td><strong>Document I/O</strong></td><td>Zia OCR for legacy/scanned ingestion; SmartBrowz for case-brief PDF generation.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="figure">
+    <div class="cap">Technology stack — Catalyst service map</div>
+    <pre class="mermaid">
+flowchart TB
+  subgraph FE[Experience]
+    WEB["Web / mobile UI<br/>Web Client Hosting"]
+    AUTH["Authentication (RBAC)"]
+  end
+  subgraph API[Gateway]
+    GW["API Gateway<br/>authZ · throttle · audit hook"]
+  end
+  subgraph LOGIC[Agentic logic]
+    CIR["Circuits — orchestration"]
+    FN["Functions — agents"]
+  end
+  subgraph AI[Intelligence]
+    LLM["QuickML LLM Serving<br/>Qwen 2.5-14B"]
+    RAG["QuickML RAG + Knowledge Base"]
+    ML["QuickML pipelines<br/>DBSCAN · XGBoost · anomaly"]
+    ZIA["Zia — OCR / language"]
+  end
+  subgraph DATA[Data]
+    DSx[("Data Store<br/>structured + graph")]
+    NSQL[("NoSQL — CDR / metadata")]
+    ST[("Stratus — blobs / audit")]
+    CA[("Cache — session memory")]
+  end
+  WEB-->AUTH-->GW-->CIR-->FN
+  FN-->LLM
+  FN-->RAG
+  FN-->ML
+  FN-->ZIA
+  FN-->DSx
+  FN-->NSQL
+  FN-->ST
+  FN-->CA
+    </pre>
+  </div>
+
+  <h3>Judge-winning pitch, in one paragraph</h3>
+  <p>"Every police force in the world has the data and can't ask it questions. We built the layer that lets any officer — in Kannada, by voice — ask a real investigative question and get an answer that <em>shows its sources</em>, reveals <em>hidden links no dashboard can</em>, respects <em>who is allowed to see what</em>, and is <em>running live on Catalyst</em> right now. It's not a smarter search box; it's an investigator's co-pilot that a court can trust."</p>
+
+  <h3>Implementation plan, prioritised by ROI</h3>
+  <ol>
+    <li><strong>Highest ROI, lowest effort:</strong> core RAG Q&amp;A + citation breakdown + audit log. This is the spine and the trust story.</li>
+    <li><strong>High ROI:</strong> Kannada voice round-trip and RBAC-by-rank — the two most demo-able proofs of real-world fit.</li>
+    <li><strong>High ROI, higher effort:</strong> hidden-link graph discovery — the differentiator against every incumbent.</li>
+    <li><strong>Supporting:</strong> hotspot analytics, multi-turn memory, auto case-brief PDF.</li>
+    <li><strong>Production hardening:</strong> full ingestion, entity resolution at scale, DPDP alignment, MLOps.</li>
+  </ol>
+
+  <div class="dossier brass">
+    <div class="tag">Bottom line</div>
+    <p style="margin:0">Win on <strong>trust, not novelty</strong>: explainability, access control and Kannada-first usability, delivered live on the mandated Catalyst stack. The technology landscape proves you know the field; the Catalyst-native build proves you can ship it.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>Datathon 2026 — Challenge 01.</b> Conversational AI for the KSP Crime Database.</p>
+    <p>Prepared as a national-level submission reference. Architecture mandated on Zoho Catalyst. All data examples are illustrative; no real FIR or PII is reproduced.</p>
+  </div>
+</footer>
+
+<script>
+mermaid.initialize({
+  startOnLoad:true,
+  theme:'base',
+  themeVariables:{
+    fontFamily:'Archivo, sans-serif',
+    primaryColor:'#F2EFE6',
+    primaryTextColor:'#0F1B2D',
+    primaryBorderColor:'#B8902A',
+    lineColor:'#42566C',
+    secondaryColor:'#0F1B2D',
+    tertiaryColor:'#FBFAF6',
+    fontSize:'14px'
+  },
+  flowchart:{curve:'basis',padding:14}
+});
+</script>
+</body>
+</html>
