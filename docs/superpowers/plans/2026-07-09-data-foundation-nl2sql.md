@@ -695,6 +695,13 @@ Three signals are deliberately seeded, because later plans depend on them and be
 2. **A spatial cluster** — 60 burglaries inside a ~200 m radius in Bengaluru East (feeds DBSCAN hotspots).
 3. **A name-variant person** — one accused appears in 4 cases across 3 stations under 4 spellings (feeds entity resolution and the hidden-link demo beat).
 
+> **Amended during execution (2026-07-09).** Code review found two of these three signals were not actually delivered by the code written below, and the shipped implementation in `tools/gen_data.py` differs from it. Read the committed file, not these snippets, if the two disagree.
+>
+> - **Signal 3 was broken.** `variant_targets = sorted({...})[:4]` picks the four lowest `CaseMasterID`s, which land in only **two** stations. Worse, `test_name_variants_span_three_stations` filtered on `AccusedName`, and because `"Ravi"` is in `FIRST_NAMES` and `"Kumar"` is in `LAST_NAMES`, the generator independently produces ~47 unrelated "Ravi Kumar" rows across all 12 stations — they satisfied the `>= 3 stations` assertion on their own, so the test could not detect the defect. The shipped code selects via a `_pick_variant_cases()` helper that takes one case per station, and the test filters on `Accused.PersonID = 'A9'` (the seeded rows' marker). A companion test asserts that matching by name alone returns strictly more than 4 rows, proving the first test is not a tautology.
+> - **Signal 2 was weaker than advertised.** `rng.gauss(0, 0.0015)` is a ~165 m sigma, so only 23 of 60 "clustered" burglaries fell within a true 200 m radius; the loose 0.005° bounding box in the test hid it. The shipped code rejection-samples against a hard `CLUSTER_RADIUS_DEG = 0.0018` (~200 m), making the radius a guarantee rather than a three-sigma hope, and the test measures Euclidean degree distance.
+>
+> The lesson generalises: **a test that filters on a value the generator also produces by chance asserts nothing.** Seeded fixtures need a marker column (`PersonID = 'A9'`), not a recognisable value.
+
 **Files:**
 - Create: `tools/gen_data.py`
 - Test: `tests/test_gen_data.py`
