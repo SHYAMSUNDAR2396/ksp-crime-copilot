@@ -292,6 +292,76 @@ def test_duplicate_case_scoped_table_still_rejected():
     assert 'once' in str(excinfo.value).lower()
 
 
+# --- Task 4: AND/OR are exp.Func subclasses in sqlglot 26.x and were being
+# rejected by _check_functions as unknown functions, which meant no query
+# with a compound WHERE (i.e. almost every real query, and every RBAC-scoped
+# query) could ever validate. These tests pin the fix and its boundary.
+def test_and_in_where_clause_is_allowed():
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'WHERE CaseMaster.CaseStatusID = 1 AND CaseMaster.PoliceStationID = 2 LIMIT 10'
+    )
+    assert validate.validate(sql) is not None
+
+
+def test_or_in_where_clause_is_allowed():
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'WHERE CaseMaster.CaseStatusID = 1 OR CaseMaster.PoliceStationID = 2 LIMIT 10'
+    )
+    assert validate.validate(sql) is not None
+
+
+def test_multiple_ands_with_date_range_is_allowed():
+    """The shape the NL->SQL agent actually emits: a join plus several ANDed
+    predicates including a date range."""
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'LEFT JOIN CrimeSubHead ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.CrimeSubHeadID '
+        "WHERE CrimeSubHead.CrimeHeadName = 'Burglary' "
+        "AND CaseMaster.CrimeRegisteredDate >= '2026-01-09' "
+        "AND CaseMaster.CrimeRegisteredDate <= '2026-07-09' LIMIT 50"
+    )
+    assert validate.validate(sql) is not None
+
+
+def test_xor_is_still_rejected():
+    """exp.Xor is also a Func+Connector subclass but is not ZCQL-portable, so
+    the fix must not admit it. sqlglot's default dialect does not even parse
+    the XOR keyword, so this is rejected at the parse stage (ValidationError
+    from _parse), not by _check_functions -- either way it must be rejected,
+    so we assert only on ValidationError, not on a specific message."""
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'WHERE CaseMaster.CaseStatusID = 1 XOR CaseMaster.PoliceStationID = 2 LIMIT 10'
+    )
+    with pytest.raises(ValidationError):
+        validate.validate(sql)
+
+
+def test_having_with_and_is_allowed():
+    sql = (
+        'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '
+        'GROUP BY Unit.UnitName '
+        'HAVING COUNT(CaseMaster.CaseMasterID) > 5 AND COUNT(CaseMaster.CaseMasterID) < 100 '
+        'LIMIT 10'
+    )
+    assert validate.validate(sql) is not None
+
+
+def test_not_is_allowed():
+    """exp.Not is a Unary/Condition, not an exp.Func subclass, so it was
+    never caught by this bug -- pinned here so a future sqlglot
+    reclassification (like the one that caused this bug for And/Or) is
+    caught immediately for Not too. NOT is ZCQL-portable."""
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'WHERE NOT CaseMaster.CaseStatusID = 1 LIMIT 10'
+    )
+    assert validate.validate(sql) is not None
+
+
 def test_employee_joined_twice_is_allowed():
     """Employee can be joined twice under different aliases; it carries no case scoping."""
     sql = (

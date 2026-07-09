@@ -34,6 +34,15 @@ _ROOT_REJECT = (
 
 _ALLOWED_FUNC_TYPES = (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max)
 
+# In sqlglot 26.x, boolean connectors are modeled as Func subclasses
+# (`class And(Connector, Func)`, likewise Or and Xor), so find_all(exp.Func)
+# in _check_functions sees them too. AND/OR are portable to ZCQL and must be
+# allowed; XOR is not portable and must stay rejected. Named explicitly here
+# (rather than "issubclass(node, exp.Connector)") so a future sqlglot
+# release that reclassifies more nodes as Connector/Func doesn't silently
+# widen this allowlist -- that would need a deliberate re-check of this set.
+_ALLOWED_CONNECTOR_TYPES = (exp.And, exp.Or)
+
 
 class ValidationError(Exception):
     """Raised when generated SQL leaves the allowlist. Message is a re-prompt hint."""
@@ -120,6 +129,8 @@ def _check_columns(select, aliases):
 def _check_functions(select):
     for node in select.find_all(exp.Func):
         if isinstance(node, _ALLOWED_FUNC_TYPES):
+            continue
+        if isinstance(node, _ALLOWED_CONNECTOR_TYPES):
             continue
         # For exp.Anonymous nodes, sql_name() returns "ANONYMOUS"; use node.this instead
         if isinstance(node, exp.Anonymous):
