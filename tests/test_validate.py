@@ -245,3 +245,61 @@ def test_legitimate_multi_join_still_passes():
         'LEFT JOIN District ON Unit.DistrictID = District.DistrictID LIMIT 5'
     )
     assert validate.validate(sql) is not None
+
+
+# --- Fix 1: Anonymous functions must name the actual function, not "ANONYMOUS" ---
+def test_strftime_anonymous_function_names_correctly():
+    """strftime is parsed as exp.Anonymous; the error must name it."""
+    with pytest.raises(ValidationError) as excinfo:
+        validate.validate(
+            "SELECT strftime('%Y', CaseMaster.CrimeRegisteredDate) FROM CaseMaster"
+        )
+    message = str(excinfo.value)
+    assert 'strftime' in message
+    assert 'ANONYMOUS' not in message
+
+
+def test_load_extension_anonymous_function_names_correctly():
+    """load_extension is parsed as exp.Anonymous; the error must name it."""
+    with pytest.raises(ValidationError) as excinfo:
+        validate.validate("SELECT load_extension('x') FROM CaseMaster")
+    message = str(excinfo.value)
+    assert 'load_extension' in message
+    assert 'ANONYMOUS' not in message
+
+
+# --- Fix 2: Duplicate-table check must scope to CASE_SCOPED_TABLES only ---
+def test_explicit_casemaster_self_join_still_rejected():
+    """Even with explicit JOIN...ON, CaseMaster cannot appear twice."""
+    with pytest.raises(ValidationError) as excinfo:
+        validate.validate(
+            'SELECT a.CrimeNo FROM CaseMaster a '
+            'JOIN CaseMaster b ON a.CaseMasterID = b.CaseMasterID LIMIT 5'
+        )
+    assert 'casemaster' in str(excinfo.value).lower()
+    assert 'once' in str(excinfo.value).lower()
+
+
+def test_duplicate_case_scoped_table_still_rejected():
+    """Duplicate references to other case-scoped tables (e.g., Accused) are still rejected."""
+    with pytest.raises(ValidationError) as excinfo:
+        validate.validate(
+            'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+            'JOIN Accused a1 ON CaseMaster.CaseMasterID = a1.CaseMasterID '
+            'JOIN Accused a2 ON CaseMaster.CaseMasterID = a2.CaseMasterID LIMIT 5'
+        )
+    assert 'accused' in str(excinfo.value).lower()
+    assert 'once' in str(excinfo.value).lower()
+
+
+def test_employee_joined_twice_is_allowed():
+    """Employee can be joined twice under different aliases; it carries no case scoping."""
+    sql = (
+        'SELECT CaseMaster.CrimeNo, e1.FirstName, e2.FirstName '
+        'FROM CaseMaster '
+        'LEFT JOIN Employee e1 ON CaseMaster.PolicePersonID = e1.EmployeeID '
+        'LEFT JOIN ArrestSurrender ON CaseMaster.CaseMasterID = ArrestSurrender.CaseMasterID '
+        'LEFT JOIN Employee e2 ON ArrestSurrender.IOID = e2.EmployeeID '
+        'LIMIT 5'
+    )
+    assert validate.validate(sql) is not None

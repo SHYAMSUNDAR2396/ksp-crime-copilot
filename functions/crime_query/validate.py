@@ -121,7 +121,11 @@ def _check_functions(select):
     for node in select.find_all(exp.Func):
         if isinstance(node, _ALLOWED_FUNC_TYPES):
             continue
-        name = node.sql_name() if hasattr(node, "sql_name") else type(node).__name__.upper()
+        # For exp.Anonymous nodes, sql_name() returns "ANONYMOUS"; use node.this instead
+        if isinstance(node, exp.Anonymous):
+            name = node.this
+        else:
+            name = node.sql_name() if hasattr(node, "sql_name") else type(node).__name__.upper()
         raise ValidationError(
             "function not allowed: {0}; permitted functions are {1}".format(
                 name, ", ".join(sorted(catalog.ALLOWED_FUNCTIONS))
@@ -139,9 +143,12 @@ def _check_joins(select, aliases):
             raise ValidationError(
                 "cross joins are not allowed; every JOIN needs an ON condition"
             )
+    # Only case-scoped tables (those with case-specific rows) can appear once.
+    # Other tables like Employee can be joined multiple times under different
+    # aliases without ambiguity in the RBAC scoping.
     seen_tables = set()
     for real_table in aliases.values():
-        if real_table in seen_tables:
+        if real_table in catalog.CASE_SCOPED_TABLES and real_table in seen_tables:
             raise ValidationError(
                 "table {0} may only appear once in a query".format(real_table)
             )
