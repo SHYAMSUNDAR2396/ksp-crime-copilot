@@ -98,6 +98,54 @@ def test_null_translator_is_identity():
     assert translate.NullTranslator().translate("x", "en", "kn") == "x"
 
 
+def test_protect_survives_a_word_reordering_translator_with_12_tokens():
+    """Finding 1: with 11+ tokens, a non-zero-padded index makes one
+    placeholder a substring of another (ZZ1ZZ inside ZZ10ZZ). A translator
+    that reorders whole words (real translators restructure sentences, they
+    don't byte-reverse) can then turn a valid placeholder into one that looks
+    like a different index. 12 tokens exercises the old scheme's
+    single-digit/two-digit index boundary; zero-padding must survive it.
+    """
+    tokens = ["TOKEN{0:02d}".format(i) for i in range(12)]
+    text = " ".join(tokens)
+    protected, mapping = translate.protect(text, tokens)
+
+    class WordReorderingTranslator:
+        def translate(self, text, source, target):
+            words = text.split(" ")
+            return " ".join(reversed(words))
+
+    translated = WordReorderingTranslator().translate(protected, "en", "kn")
+    restored = translate.restore(translated, mapping)
+    for token in tokens:
+        assert token in restored
+
+
+def test_protect_does_not_corrupt_preexisting_old_format_placeholder_text():
+    """Finding 2: real text containing a literal substring that collides with
+    the placeholder alphabet must not be corrupted on restore. This also
+    proves the new control-character sentinel shares no collision surface
+    with the old ZZ0ZZ-style format: text containing that literal string
+    verbatim must pass through completely unaffected.
+    """
+    text = "Vehicle plate reads ZZ0ZZ near the scene. Case {0}.".format(CRIMENO)
+    protected, mapping = translate.protect(text, [CRIMENO])
+    restored = translate.restore(protected, mapping)
+    assert restored == text
+    assert "ZZ0ZZ" in restored
+
+
+def test_protect_raises_on_placeholder_collision():
+    """The defensive guard: if the sentinel format's placeholder is already
+    present in the text before substitution, protect() must raise instead of
+    silently proceeding (which could double-replace or let restore()
+    overwrite text that was never a placeholder).
+    """
+    colliding_text = "Note: \x000000\x01 already looks like our own placeholder. Ravi Kumar."
+    with pytest.raises(translate.PlaceholderCollisionError):
+        translate.protect(colliding_text, ["Ravi Kumar"])
+
+
 def test_kannada_pivot_reaches_the_same_pipeline_input():
     """Once to_english runs, the pipeline sees an indistinguishable English string.
 

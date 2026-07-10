@@ -24,13 +24,29 @@ def detect(text):
     return "kn" if kannada / len(letters) >= KANNADA_SHARE_THRESHOLD else "en"
 
 
+# Delimited by ASCII control characters (never legitimate in police narrative
+# text, names, or crime numbers) and zero-padded to a fixed width, so no
+# placeholder can ever be a substring of another regardless of token count.
+PLACEHOLDER_FORMAT = "\x00{0:04d}\x01"
+
+
+class PlaceholderCollisionError(Exception):
+    """Raised when a placeholder we're about to insert already appears in the
+    text. This means the sentinel isn't actually unique -- fail loudly rather
+    than silently corrupt a citation."""
+
+
 def protect(text, tokens):
     """Replace each token with an opaque placeholder. Longest token first."""
     mapping = {}
     for index, token in enumerate(sorted(set(tokens), key=len, reverse=True)):
         if not token or token not in text:
             continue
-        placeholder = "ZZ{0}ZZ".format(index)
+        placeholder = PLACEHOLDER_FORMAT.format(index)
+        if placeholder in text:
+            raise PlaceholderCollisionError(
+                "Placeholder {0!r} already present in text before substitution".format(placeholder)
+            )
         mapping[placeholder] = token
         text = text.replace(token, placeholder)
     return text, mapping
