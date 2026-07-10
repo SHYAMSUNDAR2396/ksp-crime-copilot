@@ -12,6 +12,10 @@ class DBError(Exception):
     """Raised when a query is refused or the backend fails."""
 
 
+# Deliberately a substring match on the raw SQL text, not a parsed table
+# reference: over-broad defense-in-depth that fails closed. Do not "fix" this
+# into a precise AST check -- a precise check can be fooled by an alias or
+# a table name it doesn't recognise; this can only ever over-reject.
 def _reject_audit_table(sql):
     if catalog.AUDIT_TABLE.lower() in sql.lower():
         raise DBError(

@@ -7,9 +7,23 @@ import datetime as dt
 import json
 import os
 
-from . import agent, translate
+from . import agent, catalog, translate
 from .db import SqliteDB, ZcqlDB
 from .llm import QuickMLLLM
+from .rbac import MASK
+
+
+def _identifying_values(rows):
+    """String values of any IDENTIFYING_COLUMNS present in result rows, so
+    names and narrative text can be protected through the Kannada round trip
+    just like crime numbers. Skips redacted (MASK) and non-string values."""
+    bare_names = {col.split(".", 1)[1] for col in catalog.IDENTIFYING_COLUMNS}
+    values = []
+    for row in rows:
+        for key, value in row.items():
+            if key in bare_names and isinstance(value, str) and value != MASK:
+                values.append(value)
+    return values
 
 
 def handle_question(payload, db, llm, translator, today):
@@ -27,11 +41,16 @@ def handle_question(payload, db, llm, translator, today):
                 "sql": "", "rows": [], "citations": [], "language": "en"}
 
     language = translate.detect(question)
-    english_question = translate.to_english(question, translator)
+    try:
+        english_question = translate.to_english(question, translator)
+    except translate.TranslationError:
+        return {"refused": True,
+                "answer": "Translation service is unavailable; please try again in English.",
+                "sql": "", "rows": [], "citations": [], "language": "en"}
 
     result = agent.answer(english_question, caller, db, llm, today)
 
-    protected = list(result.citations)
+    protected = list(result.citations) + _identifying_values(result.rows)
     rendered = translate.to_user_language(result.text, language, translator, protected)
 
     return {

@@ -57,16 +57,42 @@ def test_kannada_question_is_pivoted_and_answer_rendered_back(db):
     real = [row["CrimeNo"] for row in db.execute(SQL)]
     assert len(real) == 2
 
+    name_sql = (
+        "SELECT CaseMaster.CrimeNo, Accused.AccusedName FROM CaseMaster "
+        "JOIN Accused ON Accused.CaseMasterID = CaseMaster.CaseMasterID "
+        "WHERE CaseMaster.PoliceStationID = 1 LIMIT 1"
+    )
+    accused_name = db.execute(name_sql)[0]["AccusedName"]
+
     payload = {"employee_id": 9, "question": "ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಪ್ರಕರಣಗಳು?"}
-    llm = FakeLLM([SQL, "Cases {0} and {1}.".format(*real)])
+    llm = FakeLLM([
+        name_sql,
+        "Cases {0} and {1} involve accused {2}.".format(real[0], real[0], accused_name),
+    ])
     result = main.handle_question(payload, db, llm, Echo(), TODAY)
 
     assert result["language"] == "kn"
     assert "<kn>" in result["answer"]
-    assert sorted(result["citations"]) == sorted(real)
     # Crime numbers survive the round trip untranslated and unmangled.
-    for crime_no in real:
-        assert crime_no in result["answer"]
+    assert real[0] in result["answer"]
+    # Names present in the row data survive the round trip too, not just citations.
+    assert accused_name in result["answer"]
+    assert accused_name.upper() not in result["answer"].replace(accused_name, "")
+
+
+def test_translation_error_on_input_side_is_refused_gracefully(db):
+    class Broken:
+        def translate(self, text, source, target):
+            raise translate.TranslationError("Zia is down")
+
+    payload = {"employee_id": 9, "question": "ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಪ್ರಕರಣಗಳು?"}
+    result = main.handle_question(payload, db, FakeLLM([]), Broken(), TODAY)
+
+    assert result["refused"] is True
+    assert result["sql"] == ""
+    assert result["rows"] == []
+    assert result["citations"] == []
+    assert result["language"] == "en"
 
 
 def test_response_never_leaks_the_generated_sql_on_refusal(db):

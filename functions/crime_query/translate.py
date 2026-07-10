@@ -1,8 +1,10 @@
 """Kannada bridge: detect -> pivot to English -> reason -> render back.
 
-Names and crime numbers never reach the translator. They are swapped for
-opaque placeholders first, because a crime number rendered in Kannada numerals
-is an uncitable answer.
+`protect`/`restore` swap any given token for an opaque placeholder before
+translation and back after, so it survives the round trip unmangled. This
+module doesn't decide what to protect -- main.py gathers names and crime
+numbers from the answer text and result rows and passes them in, because a
+crime number or accused name rendered in Kannada is an uncitable answer.
 """
 KANNADA_RANGE = (0x0C80, 0x0CFF)
 KANNADA_SHARE_THRESHOLD = 0.15

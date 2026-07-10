@@ -127,7 +127,7 @@ def _refuse(db, caller, question, generated, reason, now):
 
 
 def answer(question, caller, db, llm, today, now=None):
-    now = now or dt.datetime.utcnow()
+    now = now or dt.datetime.now(dt.timezone.utc)
     generated = ""
 
     try:
