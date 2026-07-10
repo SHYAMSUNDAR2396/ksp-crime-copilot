@@ -76,7 +76,11 @@ def _sensitive_policy(select, caller, aliases):
             continue
         if id(column) in projection_nodes:
             continue
-        if id(column) in group_nodes:
+        # GROUP BY exempts a sensitive column from rejection only when the
+        # caller is senior enough (rank_hierarchy <= SENSITIVE_MAX_HIERARCHY)
+        # -- otherwise GROUP BY row-ordering lets an unauthorised caller
+        # recover masked values by position (see task-5-report.md).
+        if authorised and id(column) in group_nodes:
             continue
         raise RbacError(
             "caste and religion may only appear in the selected columns of an "

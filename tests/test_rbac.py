@@ -102,15 +102,53 @@ def test_sp_row_level_sensitive_column_is_still_redacted():
     assert redact == ["CasteID"]
 
 
-def test_inspector_aggregate_over_sensitive_column_is_redacted():
+def test_inspector_aggregate_over_sensitive_column_is_rejected():
+    with pytest.raises(RbacError):
+        scoped(
+            'SELECT ComplainantDetails.ReligionID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
+            'LEFT JOIN ComplainantDetails '
+            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+            'GROUP BY ComplainantDetails.ReligionID',
+            INSPECTOR,
+        )
+
+
+def test_constable_aggregate_over_sensitive_column_is_rejected():
+    with pytest.raises(RbacError):
+        scoped(
+            'SELECT ComplainantDetails.ReligionID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
+            'LEFT JOIN ComplainantDetails '
+            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+            'GROUP BY ComplainantDetails.ReligionID',
+            CONSTABLE,
+        )
+
+
+def test_dgp_aggregate_over_sensitive_column_is_not_redacted():
     _, redact = scoped(
-        'SELECT ComplainantDetails.ReligionID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
+        'SELECT ComplainantDetails.CasteID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
         'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
-        'GROUP BY ComplainantDetails.ReligionID',
-        INSPECTOR,
+        'GROUP BY ComplainantDetails.CasteID',
+        DGP,
     )
-    assert redact == ["ReligionID"]
+    assert redact == []
+
+
+def test_constable_cannot_infer_caste_distribution_by_group_position():
+    """Regression for the leak this fix closes: GROUP BY row-position lets a
+    masked caste distribution be recovered by an unauthorised caller. The
+    exception must be rejected outright, not redacted, for anyone below SP.
+    """
+    with pytest.raises(RbacError):
+        scoped(
+            'SELECT ComplainantDetails.CasteID, COUNT(CaseMaster.CaseMasterID) AS n '
+            'FROM CaseMaster '
+            'LEFT JOIN ComplainantDetails '
+            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+            'GROUP BY ComplainantDetails.CasteID',
+            CONSTABLE,
+        )
 
 
 def test_redact_key_follows_the_alias():
