@@ -64,24 +64,86 @@ def _output_key(projection):
     return projection.name
 
 
+def _group_by_is_safe_aggregate(select, aliases):
+    """True iff every GROUP BY key is sensitive itself or a lookup/dimension
+    column (a table outside catalog.CASE_SCOPED_TABLES).
+
+    Caste/religion may be seen in the clear only when the grouping is a
+    genuine demographic aggregate (by caste, by religion, by district, by
+    crime type). A case-scoped, non-sensitive key (CrimeNo, AgeYear,
+    AccusedName, ...) makes each group a single case or person -- a
+    row-in-disguise, not an aggregate -- so it must never grant passthrough.
+    """
+    group = select.args.get("group")
+    if group is None:
+        return False
+    for column in group.find_all(exp.Column):
+        if _dotted(column, aliases) in catalog.SENSITIVE_COLUMNS:
+            continue
+        table = aliases.get(column.table)
+        if table is not None and table not in catalog.CASE_SCOPED_TABLES:
+            continue
+        return False
+    return True
+
+
+def _reject_function_wrapped_sensitive_columns(select, aliases):
+    """A sensitive column nested inside any function (MIN/MAX/SUM/AVG/...) in
+    the projection is never a legitimate disclosure -- MIN/MAX/SUM/AVG over a
+    caste id leaks the value, and sqlite names the output column after the
+    expression text (e.g. "MIN(ComplainantDetails.CasteID)"), not an alias we
+    could redact by. Reject outright, for every rank including DGP -- there
+    is no rank check here on purpose.
+    """
+    for projection in select.expressions:
+        target = projection.this if isinstance(projection, exp.Alias) else projection
+        if isinstance(target, exp.Column):
+            continue  # bare (optionally aliased) column -- permitted
+        for column in target.find_all(exp.Column):
+            dotted = _dotted(column, aliases)
+            if dotted in catalog.SENSITIVE_COLUMNS:
+                raise RbacError(
+                    "{0} may not be wrapped in a function or expression; "
+                    "only a bare (optionally aliased) column may be "
+                    "selected".format(dotted)
+                )
+
+
 def _sensitive_policy(select, caller, aliases):
     """Return the list of output keys to redact, or raise RbacError."""
+    _reject_function_wrapped_sensitive_columns(select, aliases)
+
     projection_nodes = _projection_column_nodes(select)
     group_nodes = _group_column_nodes(select)
-    is_grouped = select.args.get("group") is not None
-    authorised = caller.rank_hierarchy <= SENSITIVE_MAX_HIERARCHY and is_grouped
+    senior = caller.rank_hierarchy <= SENSITIVE_MAX_HIERARCHY
+    safe_group = _group_by_is_safe_aggregate(select, aliases)
+    # Passthrough (no redaction) only when senior AND the grouping is a safe
+    # demographic aggregate. `senior` alone still lets a GROUP BY key be
+    # structurally accepted below -- whether it comes out in the clear or
+    # redacted is decided here.
+    authorised = senior and safe_group
 
     for column in select.find_all(exp.Column):
         if _dotted(column, aliases) not in catalog.SENSITIVE_COLUMNS:
             continue
         if id(column) in projection_nodes:
             continue
-        # GROUP BY exempts a sensitive column from rejection only when the
-        # caller is senior enough (rank_hierarchy <= SENSITIVE_MAX_HIERARCHY)
-        # -- otherwise GROUP BY row-ordering lets an unauthorised caller
-        # recover masked values by position (see task-5-report.md).
-        if authorised and id(column) in group_nodes:
-            continue
+        if id(column) in group_nodes:
+            # A senior caller (SP/DGP) may always GROUP BY a sensitive
+            # column; `authorised` above decides whether the value leaks in
+            # the clear or gets redacted. A junior caller may never use
+            # caste/religion to group at all -- GROUP BY row-ordering would
+            # otherwise let them recover masked values by position (see
+            # task-5-report.md).
+            if senior:
+                continue
+            raise RbacError(
+                "caste and religion may only appear in the selected columns of an "
+                "aggregate query; {0} was used to filter or sort".format(
+                    _dotted(column, aliases)
+                )
+            )
+        # WHERE / JOIN ON / ORDER BY / HAVING -- rejected for everyone.
         raise RbacError(
             "caste and religion may only appear in the selected columns of an "
             "aggregate query; {0} was used to filter or sort".format(

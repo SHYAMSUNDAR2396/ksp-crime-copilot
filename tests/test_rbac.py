@@ -1,7 +1,10 @@
+import sqlite3
+
 import pytest
 
 from functions.crime_query import rbac, validate
 from functions.crime_query.rbac import Caller, RbacError
+from tools import gen_data
 
 CONSTABLE = Caller(employee_id=9, unit_id=3, district_id=1, rank_hierarchy=6)
 INSPECTOR = Caller(employee_id=1, unit_id=1, district_id=1, rank_hierarchy=4)
@@ -18,6 +21,21 @@ def scoped(sql, caller, db=None):
     ast = validate.validate(sql)
     units = rbac.allowed_units(caller, db or FakeDB())
     return rbac.apply(ast, caller, units)
+
+
+@pytest.fixture(scope="module")
+def crime_db(tmp_path_factory):
+    """A real sqlite build of the schema, for end-to-end leak-closure checks.
+    Uses gen_data.build() directly (same pattern as tests/test_gen_data.py)
+    rather than shelling out, so it's hermetic under pytest and needs no
+    pre-built build/crime.db on disk.
+    """
+    out = tmp_path_factory.mktemp("rbac_e2e")
+    gen_data.build(str(out / "crime.db"), csv_dir=str(out / "csv"))
+    conn = sqlite3.connect(str(out / "crime.db"))
+    conn.row_factory = sqlite3.Row
+    yield conn
+    conn.close()
 
 
 def test_constable_is_scoped_to_own_unit():
@@ -174,3 +192,116 @@ def test_allowed_units_tiers():
     assert rbac.allowed_units(SP, db) == [1, 2, 3, 4]
     assert rbac.allowed_units(INSPECTOR, db) == [1, 2, 3, 4]
     assert rbac.allowed_units(CONSTABLE, db) == [3]
+
+
+# --- Leak A: sensitive column wrapped in an aggregate function escapes redaction ---
+
+@pytest.mark.parametrize("func", ["MIN", "MAX", "SUM", "AVG"])
+def test_aggregate_over_sensitive_column_is_rejected_for_constable(func):
+    with pytest.raises(RbacError):
+        scoped(
+            'SELECT {0}(ComplainantDetails.CasteID) FROM CaseMaster '
+            'LEFT JOIN ComplainantDetails '
+            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID'.format(func),
+            CONSTABLE,
+        )
+
+
+@pytest.mark.parametrize("func", ["MIN", "MAX", "SUM", "AVG"])
+def test_aggregate_over_sensitive_column_is_rejected_for_dgp(func):
+    """Proves the rejection is not rank-gated: even the DGP, who is exempt
+    from redaction on a bare sensitive projection, cannot launder the value
+    through a function wrapper."""
+    with pytest.raises(RbacError):
+        scoped(
+            'SELECT {0}(ComplainantDetails.CasteID) FROM CaseMaster '
+            'LEFT JOIN ComplainantDetails '
+            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID'.format(func),
+            DGP,
+        )
+
+
+# --- Leak B: a token GROUP BY on a row-identifying key defeats "aggregates only" ---
+
+def test_sp_group_by_crimeno_and_caste_is_redacted_not_exempted():
+    """CrimeNo is case-scoped, so GROUP BY CrimeNo, CasteID makes every group
+    a single complainant in disguise as an aggregate. The exemption must not
+    be granted -- the query still runs, but the caste column is redacted."""
+    _, redact = scoped(
+        'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, '
+        'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'GROUP BY CaseMaster.CrimeNo, ComplainantDetails.CasteID',
+        SP,
+    )
+    assert redact == ["CasteID"]
+
+
+def test_sp_group_by_lookup_table_and_caste_keeps_exemption():
+    """CrimeSubHead is a lookup/dimension table (not in CASE_SCOPED_TABLES),
+    so grouping by it alongside CasteID is a genuine demographic aggregate
+    and the exemption still applies."""
+    _, redact = scoped(
+        'SELECT CrimeSubHead.CrimeHeadName, ComplainantDetails.CasteID, '
+        'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'LEFT JOIN CrimeSubHead '
+        'ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.CrimeSubHeadID '
+        'GROUP BY CrimeSubHead.CrimeHeadName, ComplainantDetails.CasteID',
+        SP,
+    )
+    assert redact == []
+
+
+# --- End-to-end leak closures against the real generated database ---
+
+def test_aggregate_wrap_leak_is_closed_end_to_end(crime_db):
+    """Exploit A end to end: MIN(CasteID) must never execute -- rejected for
+    every rank, so no cleartext caste value can reach the caller."""
+    sql = (
+        'SELECT MIN(ComplainantDetails.CasteID) FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID'
+    )
+    ast = validate.validate(sql)
+    for caller in (CONSTABLE, INSPECTOR, SP, DGP):
+        units = rbac.allowed_units(caller, FakeDB())
+        with pytest.raises(RbacError):
+            rbac.apply(ast, caller, units)
+
+
+def test_token_group_by_leak_is_closed_end_to_end(crime_db):
+    """Exploit B end to end, across all four ranks. SP/DGP were the leaky
+    case (rank <= SENSITIVE_MAX_HIERARCHY made `authorised` true from the
+    mere presence of a GROUP BY, regardless of which columns it grouped):
+    the query now runs for them but every CasteID cell is masked, never
+    clear. CONSTABLE/INSPECTOR were never leaky here -- a bare sensitive
+    column in GROUP BY was already rejected outright for junior ranks before
+    this fix, and still is (see test_constable_aggregate_over_sensitive_column_is_rejected);
+    that's a stricter outcome than redaction, so no cleartext caste value
+    reaches any of the four ranks either way."""
+    sql = (
+        'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, '
+        'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'GROUP BY CaseMaster.CrimeNo, ComplainantDetails.CasteID'
+    )
+    ast = validate.validate(sql)
+
+    for caller in (CONSTABLE, INSPECTOR):
+        units = rbac.allowed_units(caller, FakeDB())
+        with pytest.raises(RbacError):
+            rbac.apply(ast, caller, units)
+
+    for caller in (SP, DGP):
+        units = rbac.allowed_units(caller, FakeDB())
+        rewritten_sql, redact = rbac.apply(ast, caller, units)
+        assert redact == ["CasteID"], "exemption must not be granted for {0}".format(caller)
+        rows = [dict(row) for row in crime_db.execute(rewritten_sql).fetchall()]
+        assert rows, "expected at least one row for caller {0}".format(caller)
+        masked = rbac.redact_rows(rows, redact)
+        for row in masked:
+            assert row["CasteID"] == rbac.MASK
