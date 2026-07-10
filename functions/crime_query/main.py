@@ -4,11 +4,10 @@ Thin by design: pick the backend, resolve the caller, pivot the language,
 shape the response. Everything else is tested library code.
 """
 import datetime as dt
-import json
 import os
 
 from . import agent, catalog, translate
-from .db import SqliteDB, ZcqlDB
+from .db import ZcqlDB
 from .llm import QuickMLLLM
 from .rbac import MASK
 
@@ -65,17 +64,20 @@ def handle_question(payload, db, llm, translator, today):
     }
 
 
-def handler(context, basic_io):
-    """Signature must match the stub the Catalyst CLI generated in Task 2."""
+def handler(request):
+    """Catalyst Advanced I/O Python entrypoint. Real signature confirmed by
+    running `catalyst init` (Task 2): a Flask ``Request`` in, a Flask
+    response out -- not the ``(context, basic_io)`` shape the plan guessed.
+    """
     import zcatalyst_sdk
+    from flask import jsonify, make_response
 
     app = zcatalyst_sdk.initialize()
     db = ZcqlDB(app)
     llm = QuickMLLLM(os.environ["QUICKML_ENDPOINT"], os.environ["QUICKML_API_KEY"])
     translator = translate.ZiaTranslator(app)
 
-    payload = json.loads(basic_io.get_argument("body") or "{}")
+    payload = request.get_json(silent=True) or {}
     result = handle_question(payload, db, llm, translator, dt.date.today())
 
-    basic_io.set_status(403 if result["refused"] else 200)
-    basic_io.write(json.dumps(result, default=str))
+    return make_response(jsonify(result), 403 if result["refused"] else 200)
