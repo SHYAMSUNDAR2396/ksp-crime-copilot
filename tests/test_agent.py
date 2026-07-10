@@ -188,3 +188,69 @@ def test_db_error_is_reported_not_raised(db):
     db.close()  # force a DBError on execute
     result = agent.answer("cases", CONSTABLE, db, llm, TODAY, NOW)
     assert result.refused
+
+
+class _AuditFailingDB(object):
+    """Delegates everything to a real SqliteDB except append_audit, which
+    always raises DBError -- simulates a broken audit sink without breaking
+    the query path itself (unlike closing the real connection, which would)."""
+
+    def __init__(self, real):
+        self._real = real
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def append_audit(self, **fields):
+        raise db_module.DBError("audit sink unavailable")
+
+
+def test_audit_failure_on_success_path_still_returns_the_answer(db):
+    llm = FakeLLM([
+        "SELECT CaseMaster.CrimeNo FROM CaseMaster "
+        "WHERE CaseMaster.PoliceStationID = 1 LIMIT 3",
+        "Found three cases.",
+    ])
+    failing_db = _AuditFailingDB(db)
+    result = agent.answer("recent cases", CONSTABLE, failing_db, llm, TODAY, NOW)
+    assert not result.refused
+    assert result.text
+    assert len(result.rows) == 3
+    assert len(result.citations) == 3
+    assert result.audit_failed is True
+
+
+def test_audit_failure_on_refusal_path_still_refuses(db):
+    llm = FakeLLM([
+        "SELECT CaseMaster.PhoneNumber FROM CaseMaster",
+        "DROP TABLE CaseMaster",
+    ])
+    failing_db = _AuditFailingDB(db)
+    result = agent.answer("cases", CONSTABLE, failing_db, llm, TODAY, NOW)
+    assert result.refused is True
+    assert result.audit_failed is True
+
+
+def test_successful_audit_leaves_audit_failed_false(db):
+    llm = FakeLLM([
+        "SELECT CaseMaster.CrimeNo FROM CaseMaster LIMIT 1",
+        "ok",
+    ])
+    result = agent.answer("cases", CONSTABLE, db, llm, TODAY, NOW)
+    assert not result.refused
+    assert result.audit_failed is False
+
+
+def test_double_invalid_attempt_audits_the_second_generated_sql(db):
+    # Defect 2 regression: the retry SQL must survive into the audit row even
+    # though the second validation also failed.
+    llm = FakeLLM([
+        "SELECT CaseMaster.PhoneNumber FROM CaseMaster",
+        "DROP TABLE CaseMaster",
+    ])
+    result = agent.answer("cases", CONSTABLE, db, llm, TODAY, NOW)
+    assert result.refused
+    row = db.execute_raw(
+        'SELECT * FROM "AuditLog" ORDER BY AuditID DESC LIMIT 1'
+    )[0]
+    assert row["GeneratedSQL"] == "DROP TABLE CaseMaster"

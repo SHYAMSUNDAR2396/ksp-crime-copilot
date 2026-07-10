@@ -73,13 +73,16 @@ class SqliteDB(object):
         values = [fields[c] for c in columns]
         placeholders = ",".join("?" for _ in columns)
         quoted = ",".join('"{0}"'.format(c) for c in columns)
-        self._conn.execute(
-            'INSERT INTO "{0}" ({1}) VALUES ({2})'.format(
-                catalog.AUDIT_TABLE, quoted, placeholders
-            ),
-            values,
-        )
-        self._conn.commit()
+        try:
+            self._conn.execute(
+                'INSERT INTO "{0}" ({1}) VALUES ({2})'.format(
+                    catalog.AUDIT_TABLE, quoted, placeholders
+                ),
+                values,
+            )
+            self._conn.commit()
+        except sqlite3.Error as err:
+            raise DBError(str(err))
 
     def close(self):
         self._conn.close()

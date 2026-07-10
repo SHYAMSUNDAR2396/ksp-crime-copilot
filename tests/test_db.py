@@ -68,6 +68,26 @@ def test_append_audit_writes_a_row(db):
     assert after == before + 1
 
 
+def test_append_audit_on_closed_connection_raises_dberror(tmp_path):
+    # Mirrors the execute_raw/ZcqlDB.append_audit pattern: a dead connection
+    # must surface as DBError, never a raw sqlite3 exception.
+    path = tmp_path / "closed.db"
+    gen_data.build(str(path))
+    handle = db_module.SqliteDB(str(path))
+    handle.close()
+    with pytest.raises(db_module.DBError):
+        handle.append_audit(
+            EmployeeID=1,
+            RankHierarchy=4,
+            Question="q",
+            GeneratedSQL="SELECT 1",
+            ExecutedSQL="SELECT 1",
+            CrimeNos="",
+            RowCount=0,
+            Timestamp="2026-07-09T10:00:00",
+        )
+
+
 def test_audit_log_is_not_reachable_through_execute(db):
     # execute() is the path generated SQL takes; AuditLog is not in the catalog,
     # so validate() rejects it long before this. This asserts the second line of

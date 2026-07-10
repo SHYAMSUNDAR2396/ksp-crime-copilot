@@ -32,6 +32,7 @@ class Answer:
     hallucinated_crimenos: list = field(default_factory=list)
     refused: bool = False
     refusal_reason: str = ""
+    audit_failed: bool = False
 
 
 def crime_numbers(rows):
@@ -84,10 +85,20 @@ def _generate_sql(question, caller, db, llm, today):
     except validate.ValidationError as first_error:
         repair = prompt_module.repair_prompt(raw, str(first_error), base_prompt)
         retry = strip_fence(llm.complete(repair))
-        return validate.validate(retry), retry
+        try:
+            return validate.validate(retry), retry
+        except validate.ValidationError as second_error:
+            second_error.sql = retry  # preserve what was tried for the audit trail
+            raise
 
 
 def _audit(db, caller, question, generated, executed, citations, rows, now):
+    """Returns True if the audit row was written, False if the write failed.
+
+    A broken audit sink must never crash the user-facing answer path, so the
+    failure is caught here -- but only DBError, since db.py now guarantees
+    both backends raise DBError (never a raw driver exception) on failure.
+    """
     try:
         db.append_audit(
             EmployeeID=caller.employee_id,
@@ -99,24 +110,19 @@ def _audit(db, caller, question, generated, executed, citations, rows, now):
             RowCount=len(rows),
             Timestamp=now.isoformat(),
         )
-    except Exception:
-        # ponytail: SqliteDB.append_audit doesn't route through execute_raw's
-        # sqlite3.Error -> DBError translation (unlike ZcqlDB.append_audit,
-        # which already guards this), so a dead connection raises a raw
-        # driver error here instead of DBError. A broken audit sink must
-        # never crash the user-facing answer path, so swallow it. Fix the
-        # ceiling upstream in db.py if append_audit ever gets the same guard
-        # execute_raw has.
-        pass
+        return True
+    except DBError:
+        return False
 
 
 def _refuse(db, caller, question, generated, reason, now):
-    _audit(db, caller, question, generated, "", [], [], now)
+    audit_ok = _audit(db, caller, question, generated, "", [], [], now)
     return Answer(
         text=REFUSAL_TEXT.format(reason=reason),
         sql=generated,
         refused=True,
         refusal_reason=reason,
+        audit_failed=not audit_ok,
     )
 
 
@@ -128,6 +134,7 @@ def answer(question, caller, db, llm, today, now=None):
         select, generated = _generate_sql(question, caller, db, llm, today)
     except (validate.ValidationError, LLMError, DBError) as err:
         # DBError belongs here too: build_prompt reads lookup values from the DB.
+        generated = getattr(err, "sql", generated)
         return _refuse(db, caller, question, generated, str(err), now)
 
     try:
@@ -155,7 +162,7 @@ def answer(question, caller, db, llm, today, now=None):
     # Citations are the crime numbers the *rows* contain, not the ones the model
     # chose to mention. A model that answers "three cases were found" without
     # listing them still produces a fully citable answer.
-    _audit(db, caller, question, generated, executed_sql, allowed, rows, now)
+    audit_ok = _audit(db, caller, question, generated, executed_sql, allowed, rows, now)
 
     return Answer(
         text=text,
@@ -164,4 +171,5 @@ def answer(question, caller, db, llm, today, now=None):
         citations=allowed,
         filter_citation=filter_citation,
         hallucinated_crimenos=hallucinated,
+        audit_failed=not audit_ok,
     )
