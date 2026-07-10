@@ -58,7 +58,13 @@ def test_answer_prompt_carries_rows_and_forbids_invented_crimenos():
         "SELECT CaseMaster.CrimeNo FROM CaseMaster LIMIT 1",
     )
     assert "1" * 18 in text
-    assert "only" in text.lower()
+    assert "never invent" in text.lower()
+
+
+def test_prompt_requires_crimeno_for_identifying_aggregates(db):
+    text = prompt.build_prompt("who are the most frequent accused persons?", db, TODAY)
+    assert "names a person" in text.lower()
+    assert "brieffacts" in text.lower()
 
 
 def test_answer_prompt_truncates_large_row_sets():

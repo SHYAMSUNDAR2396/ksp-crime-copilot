@@ -32,8 +32,11 @@ _RULES = """Rules, all mandatory:
    CaseMaster.CrimeRegisteredDate >= '2026-01-09'.
 6. Any query that reads case data must include CaseMaster, joining back to it on
    CaseMasterID, so the result can be scoped to the caller's role.
-7. Any query returning individual cases must select CaseMaster.CrimeNo, so the answer
-   can cite them. Aggregate queries need not.
+7. Any query returning individual cases (not aggregated) must select CaseMaster.CrimeNo,
+   so the answer can cite them. An aggregate query need not select CaseMaster.CrimeNo,
+   unless it also projects a column that names a person (e.g. an accused, victim, or
+   complainant name) or reproduces case narrative text (BriefFacts) - then it must
+   select CaseMaster.CrimeNo too, so those rows can still be cited.
 8. Add a LIMIT. Never above 200.
 9. Use only the exact lookup values listed below. If the question names something not
    in those lists, choose the closest listed value.
