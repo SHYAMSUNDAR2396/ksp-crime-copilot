@@ -53,12 +53,20 @@ class QuickMLLLM(object):
             )
             response.raise_for_status()
             payload = response.json()
+            if not isinstance(payload, dict):
+                raise LLMError(
+                    "QuickML returned an unexpected response shape: {0}".format(type(payload).__name__)
+                )
+            output = payload.get("output")
+            text_field = payload.get("text")
+            text = output if isinstance(output, str) and output else (
+                text_field if isinstance(text_field, str) else ""
+            )
         except requests.RequestException as err:
             raise LLMError("QuickML request failed: {0}".format(err))
         except ValueError as err:
             raise LLMError("QuickML returned non-JSON: {0}".format(err))
 
-        text = payload.get("output") or payload.get("text") or ""
         if not text.strip():
             raise LLMError("QuickML returned an empty completion")
         return text

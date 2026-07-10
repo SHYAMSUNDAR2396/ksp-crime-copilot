@@ -1,4 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
 
 from functions.crime_query import llm
 
@@ -29,3 +32,85 @@ def test_fake_llm_raises_when_script_exhausted():
 )
 def test_strip_fence(raw, expected):
     assert llm.strip_fence(raw) == expected
+
+
+def _make_client():
+    return llm.QuickMLLLM("https://quickml.example/complete", "test-key")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_success_sends_temperature_zero(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: {"output": "SELECT 1"})
+    client = _make_client()
+
+    result = client.complete("give me sql")
+
+    assert result == "SELECT 1"
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["temperature"] == 0.0
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_raises_llm_error_on_connection_error(mock_post):
+    mock_post.side_effect = requests.ConnectionError("boom")
+    client = _make_client()
+
+    with pytest.raises(llm.LLMError):
+        client.complete("give me sql")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_raises_llm_error_on_http_error(mock_post):
+    response = MagicMock()
+    response.raise_for_status.side_effect = requests.HTTPError("500")
+    mock_post.return_value = response
+    client = _make_client()
+
+    with pytest.raises(llm.LLMError):
+        client.complete("give me sql")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_raises_llm_error_on_non_json_body(mock_post):
+    response = MagicMock()
+    response.json.side_effect = ValueError("not json")
+    mock_post.return_value = response
+    client = _make_client()
+
+    with pytest.raises(llm.LLMError):
+        client.complete("give me sql")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_raises_llm_error_on_non_dict_body(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: [1, 2, 3])
+    client = _make_client()
+
+    with pytest.raises(llm.LLMError):
+        client.complete("give me sql")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_raises_llm_error_on_non_string_output(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: {"output": 42})
+    client = _make_client()
+
+    with pytest.raises(llm.LLMError):
+        client.complete("give me sql")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_raises_llm_error_on_empty_output(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: {"output": ""})
+    client = _make_client()
+
+    with pytest.raises(llm.LLMError, match="empty completion"):
+        client.complete("give me sql")
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_falls_back_to_text_field(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: {"text": "fallback"})
+    client = _make_client()
+
+    assert client.complete("give me sql") == "fallback"
