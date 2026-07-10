@@ -109,6 +109,17 @@ def _reject_function_wrapped_sensitive_columns(select, aliases):
                 )
 
 
+def _group_by_dotted_keys(select, aliases):
+    """Dotted RealTable.Column names of every GROUP BY key, for comparing
+    against a projection column by identity of what it refers to (the
+    projection node and the GROUP BY node are different AST objects even
+    when they name the same column)."""
+    group = select.args.get("group")
+    if group is None:
+        return frozenset()
+    return frozenset(_dotted(column, aliases) for column in group.find_all(exp.Column))
+
+
 def _sensitive_policy(select, caller, aliases):
     """Return the list of output keys to redact, or raise RbacError."""
     _reject_function_wrapped_sensitive_columns(select, aliases)
@@ -116,12 +127,15 @@ def _sensitive_policy(select, caller, aliases):
     projection_nodes = _projection_column_nodes(select)
     group_nodes = _group_column_nodes(select)
     senior = caller.rank_hierarchy <= SENSITIVE_MAX_HIERARCHY
-    safe_group = _group_by_is_safe_aggregate(select, aliases)
-    # Passthrough (no redaction) only when senior AND the grouping is a safe
-    # demographic aggregate. `senior` alone still lets a GROUP BY key be
-    # structurally accepted below -- whether it comes out in the clear or
-    # redacted is decided here.
-    authorised = senior and safe_group
+    # Shape check only: senior caller AND every GROUP BY key is sensitive-or-
+    # lookup. This does NOT by itself clear any column -- it only says the
+    # query *could* contain a legitimate demographic aggregate. Leak C: a
+    # safe_aggregate shape used to exempt the whole projection, so a second
+    # sensitive column riding along in SELECT but absent from GROUP BY (not
+    # aggregated, not grouped) leaked one arbitrary row's value in the clear.
+    # Per-column exemption below is what actually decides passthrough.
+    safe_aggregate = senior and _group_by_is_safe_aggregate(select, aliases)
+    group_dotted = _group_by_dotted_keys(select, aliases)
 
     for column in select.find_all(exp.Column):
         if _dotted(column, aliases) not in catalog.SENSITIVE_COLUMNS:
@@ -130,11 +144,11 @@ def _sensitive_policy(select, caller, aliases):
             continue
         if id(column) in group_nodes:
             # A senior caller (SP/DGP) may always GROUP BY a sensitive
-            # column; `authorised` above decides whether the value leaks in
-            # the clear or gets redacted. A junior caller may never use
-            # caste/religion to group at all -- GROUP BY row-ordering would
-            # otherwise let them recover masked values by position (see
-            # task-5-report.md).
+            # column; the per-column exemption below decides whether the
+            # value leaks in the clear or gets redacted. A junior caller may
+            # never use caste/religion to group at all -- GROUP BY
+            # row-ordering would otherwise let them recover masked values by
+            # position (see task-5-report.md).
             if senior:
                 continue
             raise RbacError(
@@ -151,15 +165,23 @@ def _sensitive_policy(select, caller, aliases):
             )
         )
 
-    if authorised:
-        return []
-
     redact = []
     for projection in select.expressions:
         for column in projection.find_all(exp.Column):
-            if _dotted(column, aliases) in catalog.SENSITIVE_COLUMNS:
+            dotted = _dotted(column, aliases)
+            if dotted not in catalog.SENSITIVE_COLUMNS:
+                continue
+            # Per-column exemption (Leak C fix): this specific sensitive
+            # column is clear only if the query-wide shape is safe AND this
+            # column is itself one of the GROUP BY keys -- i.e. it is the
+            # aggregate dimension, not a passenger riding along in the
+            # projection. A sensitive column outside the GROUP BY is never
+            # part of the aggregate, however senior the caller or however
+            # safe the rest of the grouping is -- it must be redacted.
+            exempt = safe_aggregate and dotted in group_dotted
+            if not exempt:
                 redact.append(_output_key(projection))
-                break
+            break
     return redact
 
 

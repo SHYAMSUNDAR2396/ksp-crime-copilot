@@ -272,6 +272,87 @@ def test_aggregate_wrap_leak_is_closed_end_to_end(crime_db):
             rbac.apply(ast, caller, units)
 
 
+# --- Leak C: a query-global "authorised" exemption clears the whole ---
+# --- projection even when only ONE sensitive column is a GROUP BY key ---
+
+def test_sensitive_column_outside_group_by_is_redacted_even_when_caste_is_grouped():
+    """The leak: SP groups by CasteID (a safe aggregate dimension) but also
+    projects ReligionID, which is neither grouped nor aggregated. ReligionID
+    must be redacted; CasteID, the actual grouping key, stays clear."""
+    _, redact = scoped(
+        'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, ComplainantDetails.ReligionID '
+        'FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'GROUP BY ComplainantDetails.CasteID',
+        SP,
+    )
+    assert "ReligionID" in redact
+    assert "CasteID" not in redact
+
+
+def test_sensitive_column_outside_group_by_is_redacted_for_dgp_too():
+    """Same query as above for DGP -- proves the redaction isn't rank-gated
+    away; DGP is exempt from redaction only on the column actually grouped."""
+    _, redact = scoped(
+        'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, ComplainantDetails.ReligionID '
+        'FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'GROUP BY ComplainantDetails.CasteID',
+        DGP,
+    )
+    assert "ReligionID" in redact
+    assert "CasteID" not in redact
+
+
+def test_sp_group_by_both_sensitive_columns_keeps_both_clear():
+    """When both sensitive columns are themselves GROUP BY keys, both are
+    legitimate aggregate dimensions and both stay clear."""
+    _, redact = scoped(
+        'SELECT ComplainantDetails.CasteID, ComplainantDetails.ReligionID, '
+        'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'GROUP BY ComplainantDetails.CasteID, ComplainantDetails.ReligionID',
+        SP,
+    )
+    assert redact == []
+
+
+def test_leak_c_closed_end_to_end(crime_db):
+    """Exploit C end to end against the real database: SP and DGP get
+    ReligionID masked in every row while CasteID (the actual GROUP BY key)
+    comes through as real integers. Constable/Inspector are still rejected
+    outright because CasteID in GROUP BY is never structurally accepted for
+    junior ranks."""
+    sql = (
+        'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, ComplainantDetails.ReligionID '
+        'FROM CaseMaster '
+        'LEFT JOIN ComplainantDetails '
+        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'GROUP BY ComplainantDetails.CasteID'
+    )
+    ast = validate.validate(sql)
+
+    for caller in (CONSTABLE, INSPECTOR):
+        units = rbac.allowed_units(caller, FakeDB())
+        with pytest.raises(RbacError):
+            rbac.apply(ast, caller, units)
+
+    for caller in (SP, DGP):
+        units = rbac.allowed_units(caller, FakeDB())
+        rewritten_sql, redact = rbac.apply(ast, caller, units)
+        assert "ReligionID" in redact
+        assert "CasteID" not in redact
+        rows = [dict(row) for row in crime_db.execute(rewritten_sql).fetchall()]
+        assert rows, "expected at least one row for caller {0}".format(caller)
+        masked = rbac.redact_rows(rows, redact)
+        for row in masked:
+            assert row["ReligionID"] == rbac.MASK
+            assert isinstance(row["CasteID"], int)
+
+
 def test_token_group_by_leak_is_closed_end_to_end(crime_db):
     """Exploit B end to end, across all four ranks. SP/DGP were the leaky
     case (rank <= SENSITIVE_MAX_HIERARCHY made `authorised` true from the
