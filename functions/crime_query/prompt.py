@@ -28,7 +28,8 @@ _RULES = """Rules, all mandatory:
 1. Emit exactly one SELECT statement. Nothing else. No INSERT, UPDATE, DELETE, DROP.
 2. Qualify every column with its table name, e.g. CaseMaster.CrimeNo, never CrimeNo.
 3. Use only these functions: COUNT, SUM, AVG, MIN, MAX. No date functions, no CAST,
-   no string functions.
+   no string functions. Never write COUNT(*) - name an explicit column instead, e.g.
+   COUNT(CaseMaster.CaseMasterID).
 4. No subqueries, no CTEs, no UNION, no window functions.
 5. Dates are stored as text in 'YYYY-MM-DD' form. Compare them with string literals
    you compute yourself from today's date. Example: the last 6 months is

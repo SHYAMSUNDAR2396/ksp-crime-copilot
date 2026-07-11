@@ -35,12 +35,16 @@ def test_strip_fence(raw, expected):
 
 
 def _make_client():
-    return llm.QuickMLLLM("https://quickml.example/complete", "test-key")
+    return llm.QuickMLLLM("https://quickml.example/complete", "test-token", "test-org")
+
+
+def _quickml_response(text):
+    return {"response": text, "usage": {"total_tokens": 1}}
 
 
 @patch("functions.crime_query.llm.requests.post")
 def test_quickml_complete_success_sends_temperature_zero(mock_post):
-    mock_post.return_value = MagicMock(json=lambda: {"output": "SELECT 1"})
+    mock_post.return_value = MagicMock(json=lambda: _quickml_response("SELECT 1"))
     client = _make_client()
 
     result = client.complete("give me sql")
@@ -48,6 +52,23 @@ def test_quickml_complete_success_sends_temperature_zero(mock_post):
     assert result == "SELECT 1"
     _, kwargs = mock_post.call_args
     assert kwargs["json"]["temperature"] == 0.0
+    assert kwargs["json"]["model"] == llm.QuickMLLLM.MODEL
+    assert kwargs["json"]["messages"] == [{"role": "user", "content": "give me sql"}]
+    assert kwargs["headers"]["Authorization"] == "Zoho-oauthtoken test-token"
+    assert kwargs["headers"]["CATALYST-ORG"] == "test-org"
+
+
+@patch("functions.crime_query.llm.requests.post")
+def test_quickml_complete_strips_thinking_trace(mock_post):
+    """GLM-4.7-Flash emits a visible reasoning trace with no opening tag,
+    ending in </think>, before the real answer -- confirmed against a live
+    call to the deployed model, not documentation."""
+    mock_post.return_value = MagicMock(
+        json=lambda: _quickml_response("some reasoning...</think>SELECT 1")
+    )
+    client = _make_client()
+
+    assert client.complete("give me sql") == "SELECT 1"
 
 
 @patch("functions.crime_query.llm.requests.post")
@@ -91,8 +112,8 @@ def test_quickml_complete_raises_llm_error_on_non_dict_body(mock_post):
 
 
 @patch("functions.crime_query.llm.requests.post")
-def test_quickml_complete_raises_llm_error_on_non_string_output(mock_post):
-    mock_post.return_value = MagicMock(json=lambda: {"output": 42})
+def test_quickml_complete_raises_llm_error_on_non_string_response(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: {"response": 42})
     client = _make_client()
 
     with pytest.raises(llm.LLMError):
@@ -100,8 +121,8 @@ def test_quickml_complete_raises_llm_error_on_non_string_output(mock_post):
 
 
 @patch("functions.crime_query.llm.requests.post")
-def test_quickml_complete_raises_llm_error_on_empty_output(mock_post):
-    mock_post.return_value = MagicMock(json=lambda: {"output": ""})
+def test_quickml_complete_raises_llm_error_on_empty_response(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: _quickml_response(""))
     client = _make_client()
 
     with pytest.raises(llm.LLMError, match="empty completion"):
@@ -109,8 +130,9 @@ def test_quickml_complete_raises_llm_error_on_empty_output(mock_post):
 
 
 @patch("functions.crime_query.llm.requests.post")
-def test_quickml_complete_falls_back_to_text_field(mock_post):
-    mock_post.return_value = MagicMock(json=lambda: {"text": "fallback"})
+def test_quickml_complete_raises_llm_error_on_missing_response(mock_post):
+    mock_post.return_value = MagicMock(json=lambda: {"error": "bad request"})
     client = _make_client()
 
-    assert client.complete("give me sql") == "fallback"
+    with pytest.raises(llm.LLMError, match="empty completion"):
+        client.complete("give me sql")

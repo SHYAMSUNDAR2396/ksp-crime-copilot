@@ -130,7 +130,9 @@ class ZcqlDB(object):
                 int(district_id)
             )
         )
-        return sorted(row["UnitID"] for row in rows)
+        # ZCQL returns UnitID as a string; sort numerically, not lexically
+        # ("10" < "2"), and convert so the RBAC IN(...) predicate gets ints.
+        return sorted(int(row["UnitID"]) for row in rows)
 
     def lookup(self, table, column):
         rows = self.execute_raw(
@@ -140,20 +142,27 @@ class ZcqlDB(object):
         return sorted(values)
 
     def caller_for(self, employee_id):
+        # ZCQL JOINs require a declared Foreign Key relationship, which
+        # points at the parent table's internal ROWID -- not our business
+        # key (Rank.RankID) -- so Employee.RankID now stores Rank's ROWID
+        # and the join condition must match that, unlike SqliteDB above.
         rows = self.execute_raw(
             "SELECT Employee.EmployeeID, Employee.UnitID, Employee.DistrictID, "
             "Rank.Hierarchy FROM Employee "
-            "LEFT JOIN Rank ON Employee.RankID = Rank.RankID "
+            "LEFT JOIN Rank ON Employee.RankID = Rank.ROWID "
             "WHERE Employee.EmployeeID = {0}".format(int(employee_id))
         )
         if not rows:
             return None
         row = rows[0]
+        # ZCQL returns every column as a string regardless of underlying
+        # type; Caller's fields are typed int and rbac.py does numeric
+        # comparisons (<=) on rank_hierarchy, so convert at this boundary.
         return Caller(
-            employee_id=row["EmployeeID"],
-            unit_id=row["UnitID"],
-            district_id=row["DistrictID"],
-            rank_hierarchy=row["Hierarchy"],
+            employee_id=int(row["EmployeeID"]),
+            unit_id=int(row["UnitID"]),
+            district_id=int(row["DistrictID"]),
+            rank_hierarchy=int(row["Hierarchy"]),
         )
 
     def append_audit(self, **fields):

@@ -26,8 +26,15 @@ def test_limit_above_cap_is_clamped():
 
 
 def test_aggregate_query_needs_no_crimeno():
-    ast = validate.validate('SELECT COUNT(*) FROM CaseMaster')
+    ast = validate.validate('SELECT COUNT(CaseMaster.CaseMasterID) FROM CaseMaster')
     assert isinstance(ast, sqlglot.exp.Select)
+
+
+def test_count_star_is_rejected():
+    """COUNT(*) parses fine in SQLite but ZCQL rejects it outright ("* is
+    not supported in Functions") -- confirmed against a live deployment."""
+    with pytest.raises(ValidationError, match=r"COUNT\(\*\)"):
+        validate.validate('SELECT COUNT(*) FROM CaseMaster')
 
 
 def test_join_and_group_by_are_allowed():
@@ -165,7 +172,7 @@ def test_interval_date_arithmetic_is_rejected():
             'AccusedName',
         ),
         (
-            'SELECT CaseMaster.BriefFacts, COUNT(*) FROM CaseMaster '
+            'SELECT CaseMaster.BriefFacts, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
             'GROUP BY CaseMaster.BriefFacts LIMIT 5',
             'BriefFacts',
         ),
@@ -186,7 +193,7 @@ def test_aggregate_over_identifying_column_still_needs_crimeno(sql, identifying_
 @pytest.mark.parametrize(
     "sql",
     [
-        'SELECT COUNT(*) FROM CaseMaster',
+        'SELECT COUNT(CaseMaster.CaseMasterID) FROM CaseMaster',
         'SELECT District.DistrictName FROM District',
         'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
         'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '

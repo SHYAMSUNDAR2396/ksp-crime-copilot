@@ -4,6 +4,7 @@ import re
 import requests
 
 _FENCE = re.compile(r"^\s*```(?:sql)?\s*(.*?)\s*```\s*$", re.DOTALL | re.IGNORECASE)
+_THINK_END = "</think>"
 
 
 class LLMError(Exception):
@@ -16,6 +17,15 @@ def strip_fence(text):
     if match:
         text = match.group(1)
     return text.strip().rstrip(";").strip()
+
+
+def _strip_thinking(text):
+    """GLM-4.7-Flash emits a visible reasoning trace ending in </think>
+    before its real answer, with no matching opening tag in the response
+    body (the chat template opens it implicitly). Keep only what follows."""
+    if _THINK_END in text:
+        return text.split(_THINK_END, 1)[1].strip()
+    return text.strip()
 
 
 class FakeLLM(object):
@@ -33,11 +43,26 @@ class FakeLLM(object):
 
 
 class QuickMLLLM(object):
-    """Qwen 2.5-14B served by Catalyst QuickML LLM Serving."""
+    """GLM-4.7-Flash served by Catalyst QuickML LLM Serving.
 
-    def __init__(self, endpoint, api_key, timeout=30):
+    POST {"model", "messages", ...} -> {"response": "...", "usage": {...}}.
+    Confirmed empirically against the live deployment, not the console's own
+    documented sample -- the sample shows an OpenAI-style {"choices": [...]}
+    shape that this deployment does not actually return. Two more things
+    only a live call revealed: this deployment has its own large baked-in
+    system prompt and refuses (misreading it as an override attempt) if the
+    caller supplies its own "system"-role message, so `messages` is
+    user-role only; and it's a "thinking" model whose response text
+    contains a visible reasoning trace ending in </think> before the real
+    answer, which _strip_thinking() removes.
+    """
+
+    MODEL = "crm-di-glm47b_30b_it"
+
+    def __init__(self, endpoint, token, org_id, timeout=60):
         self._endpoint = endpoint
-        self._api_key = api_key
+        self._token = token
+        self._org_id = org_id
         self._timeout = timeout
 
     def complete(self, prompt):
@@ -45,10 +70,17 @@ class QuickMLLLM(object):
             response = requests.post(
                 self._endpoint,
                 headers={
-                    "Authorization": "Zoho-oauthtoken {0}".format(self._api_key),
+                    "Authorization": "Zoho-oauthtoken {0}".format(self._token),
+                    "CATALYST-ORG": self._org_id,
                     "Content-Type": "application/json",
                 },
-                json={"prompt": prompt, "temperature": 0.0, "max_tokens": 512},
+                json={
+                    "model": self.MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    "max_tokens": 2048,
+                    "stream": False,
+                },
                 timeout=self._timeout,
             )
             response.raise_for_status()
@@ -57,11 +89,8 @@ class QuickMLLLM(object):
                 raise LLMError(
                     "QuickML returned an unexpected response shape: {0}".format(type(payload).__name__)
                 )
-            output = payload.get("output")
-            text_field = payload.get("text")
-            text = output if isinstance(output, str) and output else (
-                text_field if isinstance(text_field, str) else ""
-            )
+            raw = payload.get("response")
+            text = _strip_thinking(raw) if isinstance(raw, str) else ""
         except requests.RequestException as err:
             raise LLMError("QuickML request failed: {0}".format(err))
         except ValueError as err:

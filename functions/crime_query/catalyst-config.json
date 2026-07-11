@@ -3,7 +3,10 @@
 		"name": "crime_query",
 		"stack": "python_3_9",
 		"type": "advancedio",
-		"env_variables": {}
+		"env_variables": {
+			"QUICKML_ENDPOINT": "https://api.catalyst.zoho.in/quickml/v1/project/48091000000038006/glm/chat",
+			"QUICKML_ORG_ID": "60075198995"
+		}
 	},
 	"execution": {
 		"main": "main.py"

@@ -132,6 +132,14 @@ def _check_columns(select, aliases):
 def _check_functions(select):
     for node in select.find_all(exp.Func):
         if isinstance(node, _ALLOWED_FUNC_TYPES):
+            # COUNT(*) parses fine in SQLite but ZCQL rejects it outright
+            # ("* is not supported in Functions") -- not ZCQL-portable,
+            # confirmed against a live deployment, not sqlglot's dialect.
+            if isinstance(node.this, exp.Star):
+                raise ValidationError(
+                    "{0}(*) is not allowed; name an explicit column, "
+                    "e.g. {0}(CaseMaster.CaseMasterID)".format(node.sql_name())
+                )
             continue
         if isinstance(node, _ALLOWED_CONNECTOR_TYPES):
             continue

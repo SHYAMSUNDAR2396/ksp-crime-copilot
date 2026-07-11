@@ -74,6 +74,23 @@ def handle_question(payload, db, llm, translator, today):
     }
 
 
+def _quickml_token(app):
+    """A live OAuth access token from the function's own execution context.
+
+    Catalyst's SDK refreshes this internally (see credentials.py); reusing
+    it means QuickML calls never need a manually-managed, expiring secret.
+    QUICKML_ORG_ID still comes from catalyst-config.json's env_variables --
+    unlike the token, it isn't injected by the runtime (confirmed by
+    deploying: os.environ has no X_ZOHO_CATALYST_ORG_ID here, even though
+    the SDK's own HTTP client optionally reads that name internally).
+    credential.token() returns a bare token string for most credential
+    types, but (cred_type, token) for the runtime's CatalystCredential --
+    normalise both.
+    """
+    token = app.credential.token()
+    return token[1] if isinstance(token, tuple) else token
+
+
 def handler(request):
     """Catalyst Advanced I/O Python entrypoint. Real signature confirmed by
     running `catalyst init` (Task 2): a Flask ``Request`` in, a Flask
@@ -84,7 +101,12 @@ def handler(request):
 
     app = zcatalyst_sdk.initialize()
     db = ZcqlDB(app)
-    llm = QuickMLLLM(os.environ["QUICKML_ENDPOINT"], os.environ["QUICKML_API_KEY"])
+    llm = QuickMLLLM(
+        os.environ["QUICKML_ENDPOINT"],
+        _quickml_token(app),
+        os.environ["QUICKML_ORG_ID"],
+    )
+
     translator = translate.ZiaTranslator(app)
 
     payload = request.get_json(silent=True) or {}
