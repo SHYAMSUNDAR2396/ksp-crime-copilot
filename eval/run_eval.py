@@ -88,15 +88,16 @@ def main():
     parser = argparse.ArgumentParser(description="Run the KSP NL->SQL eval.")
     parser.add_argument("--sqlite", default="build/crime.db")
     parser.add_argument("--endpoint", default=os.environ.get("QUICKML_ENDPOINT"))
-    parser.add_argument("--api-key", default=os.environ.get("QUICKML_API_KEY"))
+    parser.add_argument("--token", default=os.environ.get("QUICKML_TOKEN"))
+    parser.add_argument("--org-id", default=os.environ.get("QUICKML_ORG_ID"))
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    if not args.endpoint or not args.api_key:
-        parser.error("set QUICKML_ENDPOINT and QUICKML_API_KEY, or pass them explicitly")
+    if not args.endpoint or not args.token or not args.org_id:
+        parser.error("set QUICKML_ENDPOINT, QUICKML_TOKEN, and QUICKML_ORG_ID, or pass them explicitly")
 
     db = db_module.SqliteDB(args.sqlite)
-    llm = QuickMLLLM(args.endpoint, args.api_key)
+    llm = QuickMLLLM(args.endpoint, args.token, args.org_id)
     report = run(db, llm, load_questions(QUESTIONS_PATH), TODAY)
     db.close()
 
