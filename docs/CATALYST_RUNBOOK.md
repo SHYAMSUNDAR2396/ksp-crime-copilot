@@ -5,14 +5,17 @@ against `SqliteDB` and fakes. The steps below need a real Zoho Catalyst
 account/CLI, against project `crime-copilot` (function URL
 `https://crime-copilot-60075198995.development.catalystserverless.in/server/crime_query/`).
 
-**Status: Steps 1–2 done, Step 3's deploy done but its smoke tests NOT
-run, Steps 4–5 open.** Step 3's three smoke-test curls and Steps 4–5 all
-need `QUICKML_ENDPOINT`/`QUICKML_API_KEY` set on the function (real
-QuickML credentials) — nothing here has actually exercised the LLM yet, only
-the deploy mechanics and the Data Store/audit SDK calls. Set the function's
-environment variables in the console (Serverless → crime_query → Settings →
-Environment Variables) or via `catalyst functions:config`, then run Step 3's
-three curls before moving to Step 4.
+**Status: Steps 1–2 done, Step 3 partially working (blocked on a real
+architectural gap, see below), Steps 4–5 open.** QuickML is live and wired
+up (auth, response parsing, thinking-trace stripping all fixed and
+confirmed against real calls — see the QuickML section below). The basic
+Q&A smoke test now gets as far as generating and validating correct SQL,
+but **fails at execution** because ZCQL JOINs need each relationship
+explicitly declared as a "Foreign Key" column type pointing at the parent
+table's internal `ROWID` — not at the parent's business primary key the
+way `docs/schema-ddl.sql` and every generated query assumes. This is a
+real architecture question, not a quick fix — see "Open gap: ZCQL
+relationships" below before doing anything else with Step 3.
 
 ## 1. Task 2 — confirm the ZCQL/Data Store call surface — DONE
 
@@ -109,15 +112,47 @@ delete the stale object in the console's Stratus browser, or just copy the
 CSV under a new filename before retrying (the `--table` flag controls the
 target table independently of the uploaded filename).
 
-## 3. Deploy and smoke-test — deploy done, smoke tests NOT run
+## 3. Deploy and smoke-test — deploy confirmed, full end-to-end blocked
 
 ```bash
 catalyst deploy --only functions:crime_query
 ```
 
 Confirmed working (see the four deployment bugs listed above, all fixed).
-**The three curls below have not been run** — they need
-`QUICKML_ENDPOINT`/`QUICKML_API_KEY` set on the function first.
+
+### QuickML LLM Serving — confirmed working, three real bugs fixed
+
+`QUICKML_ENDPOINT` and `QUICKML_ORG_ID` live in
+`functions/crime_query/catalyst-config.json`'s `env_variables` (get the
+endpoint from the console: **QuickML → GLM-4.7-Flash → Model Details →
+API Details → Endpoint URL**; the org ID is the numeric ID shown next to
+`"CATALYST-ORG"` in that same panel's sample headers). Setting env vars
+through the console's function Configuration tab does **not** persist —
+`catalyst deploy` overwrites them from `catalyst-config.json` on every
+deploy, so they must live in that file, not just the console.
+
+No `QUICKML_API_KEY` is needed — `main._quickml_token(app)` pulls a live,
+auto-refreshed OAuth token from `app.credential.token()` at request time.
+
+Three things only a live call revealed, all fixed in `functions/crime_query/llm.py`:
+1. The real response shape is `{"response": "...", "usage": {...}}`, not
+   the OpenAI-style `{"choices": [...]}` the console's own sample documents.
+2. This deployment has a large baked-in system prompt and will refuse
+   (misreading it as an override attempt) if you supply your own
+   `system`-role message — send user-role messages only.
+3. It's a "thinking" model: the response text contains a visible
+   reasoning trace ending in `</think>` (no opening tag) before the real
+   answer, and needs `max_tokens` well above the default 512 to reach the
+   answer at all — `llm.py` now strips the trace and requests 2048 tokens.
+
+Confirmed via a real end-to-end LLM call (through a temporary `/probe`
+branch, since removed): given the actual `prompt.build_prompt()` output for
+"How many burglaries in Bengaluru East since April 2026?", QuickML
+returned syntactically correct SQL that `validate.validate()` accepts as-is
+— generation and validation both work. The blocker below is purely at
+execution time.
+
+### Basic Q&A smoke test — SQL generation confirmed, execution blocked
 
 Basic Q&A (constable, employee id 9 — scoped to one station):
 
@@ -128,6 +163,11 @@ curl -s -X POST "$FUNCTION_URL" \
 ```
 
 Expected: HTTP 200, `sql` contains `PoliceStationID IN (1)`, `filter_citation` names the crime sub-head and date filter.
+
+**Currently fails at execution** with `No relationship between tables
+CrimeSubHead and CaseMaster` — this is the open architectural gap below,
+not a bug in `main.py`/`agent.py`. Don't debug further here until that's
+resolved.
 
 Kannada round-trip:
 
@@ -155,6 +195,121 @@ SELECT AuditLog.Question, AuditLog.EmployeeID, AuditLog.CrimeNos FROM AuditLog
 ```
 
 Expected: one row per curl above, including any refused ones.
+
+## Open gap: ZCQL relationships need Foreign Key columns, not business keys
+
+**This blocks all three Step 3 smoke tests and needs a decision before
+more work goes into it — it's an architecture question, not a quick fix.**
+
+### What's wrong
+
+`docs/schema-ddl.sql` (and every table created from it) declares foreign
+keys as plain `INTEGER`/`TEXT` columns — e.g. `Employee.RankID INTEGER`,
+matching `Police_FIR_ER_Diagram.md` exactly. SQLite joins on any `ON`
+condition regardless of whether a formal relationship was declared, so
+this worked fine in every local test. ZCQL does not: **a JOIN between two
+tables is only allowed if one side is a column explicitly typed "Foreign
+Key" in the console**, pointing at the other table. Confirmed via:
+
+```
+ZCQL QUERY ERROR: No relationship between tables Rank and Employee
+```
+
+on the very first real query (`db.caller_for`, which runs before every
+single request).
+
+### It gets worse: Foreign Key columns reference ROWID, not the business key
+
+Converting `Employee.RankID` to a Foreign Key column (console: delete the
+column, re-add it as type **Foreign Key** with Parent Table `Rank`, On
+Delete `Null`) fixed the "no relationship" error, but the very next
+attempt failed differently:
+
+```
+Invalid Foreign key value for column RankID. ROWID of table Rank is expected
+```
+
+Catalyst's Foreign Key columns store and compare against the **parent
+table's internal, platform-generated `ROWID`** — not `Rank.RankID`, the
+business primary key from `Police_FIR_ER_Diagram.md` that every table in
+this schema uses as its declared PK. This is fixable per-relationship (see
+the worked example below), but it means:
+
+- The JOIN condition itself must change (`ON Employee.RankID = Rank.ROWID`,
+  not `Rank.RankID`) everywhere that relationship is used.
+- For relationships **we hardcode** (like `db.caller_for`'s join, fixed
+  in commit `7ad6b06`), this is a one-line change.
+- For relationships the **LLM generates from natural language** (e.g.
+  `CaseMaster → CrimeSubHead` for "how many burglaries"), the model has no
+  way to know it must join against `ROWID` — it only sees our schema
+  description, which (correctly, per the ER doc) names `CrimeSubHeadID`
+  as the business key. Converting `CaseMaster.CrimeMinorHeadID` to a
+  Foreign Key column the same way would make the model's own naturally
+  correct SQL wrong every time.
+
+This is the real blocker: fixing individual relationships one at a time
+doesn't generalize to arbitrary LLM-generated JOINs across the 40
+relationships in `catalog.FOREIGN_KEYS`. It needs one of:
+
+1. **Teach the model about ROWID indirection** — extend
+   `prompt.py`'s schema description to tell the model which columns are
+   Catalyst Foreign Keys and that those specific joins must use `ROWID`,
+   and remap every touched table's foreign-key column values from
+   business keys to the parent's actual `ROWID` (export the parent table,
+   build a mapping, remap the CSV, re-import via `upsert` — see the
+   worked example below). Scales to however many relationships the demo
+   actually needs, but every new relationship is real, careful, easy-to-
+   get-wrong ETL work, and the model must get the ROWID-vs-business-key
+   distinction right for every JOIN it writes.
+2. **Redesign around application-side joins** — `agent.py`/`db.py` fetch
+   from one table at a time and merge in Python, never emitting a ZCQL
+   `JOIN`. Avoids the ROWID problem entirely, but is a real architecture
+   change touching `validate.py`, `rbac.py`, and `prompt.py`'s core
+   assumption that every answer is one validated SQL statement.
+3. **Live with SQLite-only correctness** for the datathon submission,
+   documenting ZCQL relationship support as a known gap, and demo against
+   `SqliteDB` (fully working, 197 tests passing) rather than the live
+   Catalyst deployment.
+
+### Worked example: `Employee.RankID → Rank` (the one relationship fixed so far)
+
+This relationship is hardcoded in `db.py` (not LLM-generated), so it was
+safe to fix directly — use this as the template for any other relationship
+you decide to convert:
+
+```bash
+# 1. Console: Employee table -> delete RankID column -> + New Column:
+#    Name RankID, Data Type "Foreign Key", Parent Table "Rank", On Delete "Null"
+
+# 2. Export the parent table to get its ROWID mapping
+catalyst ds:export --table Rank
+catalyst ds:status export <jobid>   # answer y to download the report zip
+unzip Export_*.zip                  # -> Table-Rank.csv with ROWID + RankID columns
+
+# 3. Console: mark the child table's primary key column "Is Unique" if not
+#    already (needed for upsert's find_by) -- e.g. Employee.EmployeeID
+
+# 4. Remap the child CSV's FK column from business key -> parent ROWID
+#    (see the Python snippet used for Employee.csv in the commit history
+#    around 7ad6b06 -- reads Table-Rank.csv into a RankID->ROWID dict,
+#    rewrites Employee.csv's RankID column, writes a new file)
+
+# 5. Re-import in upsert mode so existing rows get the column filled in
+#    rather than duplicated
+cat > upsert_config.json <<'JSON'
+{"operation": "upsert", "find_by": "EmployeeID"}
+JSON
+catalyst ds:import build/csv/Employee_fk_remapped.csv --table Employee --config upsert_config.json
+
+# 6. Fix the JOIN condition in code (db.py's ZcqlDB.caller_for, already done)
+#    to compare against Rank.ROWID, not Rank.RankID
+```
+
+Two other console gotchas hit along the way, both already documented
+above under Step 1: `ds:import` 409s on a filename already uploaded to the
+Stratus bucket (copy the CSV under a new name to retry), and a table's
+primary-key-like column needs `"Is Unique"` toggled on before it can be
+used as an `upsert` `find_by` target.
 
 ## 4. Kannada parity spot-check (10 paired questions)
 
@@ -194,14 +349,21 @@ headline evaluation numbers, everything before this point used `FakeLLM`.
 
 ## What "done" looks like
 
-- Data Store has 5000 `CaseMaster` rows and all 26 other tables populated.
-- All three smoke-test curls (Step 3) return expected shapes.
-- `AuditLog` has one row per request, including refusals.
-- 10/10 (or documented fewer) Kannada/English pairs produce identical SQL.
-- `eval/run_eval.py`'s live run produces real accuracy/hallucination/latency numbers.
+- Data Store has 5000 `CaseMaster` rows and all 26 other tables populated. **Done.**
+- All three smoke-test curls (Step 3) return expected shapes. **Blocked** —
+  see "Open gap: ZCQL relationships" above. SQL generation and validation
+  are confirmed working; execution fails on undeclared relationships.
+- `AuditLog` has one row per request, including refusals. **Done** for the
+  cases tried so far (the probe writes, and any refused request writes too
+  since `_audit` runs on every path).
+- 10/10 (or documented fewer) Kannada/English pairs produce identical SQL. **Not started** — blocked behind Step 3.
+- `eval/run_eval.py`'s live run produces real accuracy/hallucination/latency numbers. **Not started** — blocked behind Step 3, and would currently score near 0% until the relationship gap is resolved (every query needs at least the `Employee → Rank` join to authenticate, plus whatever joins each question needs).
 
 If any step fails, the fix almost always belongs in the same module that
 step is testing (`db.py` for Step 1/3, `translate.py`/`prompt.py` for Step
 4, `llm.py` for Step 5) — not in a new workaround file. Every module here
 was built with a unit-test seam precisely so a live-environment mismatch is
-a small, targeted fix.
+a small, targeted fix. The one exception found today is the ZCQL
+relationship gap above, which is a genuine architecture decision, not a
+seam-level fix — resolve that first via one of the three options listed
+before spending more time on Steps 3-5.
