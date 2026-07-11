@@ -59,10 +59,13 @@ class SqliteDB(object):
         return [row["v"] for row in rows if row["v"] is not None]
 
     def caller_for(self, employee_id):
+        # gen_data.py's _remap_foreign_keys_to_rowid rewrites Employee.RankID
+        # to hold Rank's rowid, not its business RankID, so both backends'
+        # join conditions agree (see ZcqlDB.caller_for below).
         rows = self.execute_raw(
             'SELECT Employee.EmployeeID, Employee.UnitID, Employee.DistrictID, '
             'Rank.Hierarchy AS RankHierarchy '
-            'FROM "Employee" JOIN "Rank" ON Employee.RankID = Rank.RankID '
+            'FROM "Employee" JOIN "Rank" ON Employee.RankID = Rank.rowid '
             'WHERE Employee.EmployeeID = ?',
             (employee_id,),
         )
@@ -144,8 +147,8 @@ class ZcqlDB(object):
     def caller_for(self, employee_id):
         # ZCQL JOINs require a declared Foreign Key relationship, which
         # points at the parent table's internal ROWID -- not our business
-        # key (Rank.RankID) -- so Employee.RankID now stores Rank's ROWID
-        # and the join condition must match that, unlike SqliteDB above.
+        # key (Rank.RankID). Employee.RankID stores Rank's ROWID here too,
+        # matching SqliteDB's join above (both remapped consistently).
         rows = self.execute_raw(
             "SELECT Employee.EmployeeID, Employee.UnitID, Employee.DistrictID, "
             "Rank.Hierarchy FROM Employee "

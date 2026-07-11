@@ -47,6 +47,17 @@ def test_prompt_states_the_hard_rules(db):
         assert rule.lower() in text.lower(), rule
 
 
+def test_prompt_teaches_rowid_joins(db):
+    """ZCQL Foreign Key columns reference the parent's internal ROWID, not
+    any business primary key -- confirmed against a live deployment. The
+    schema description and the rules must both say so, or the model has
+    no way to know this and will generate SQL that fails at execution."""
+    text = prompt.build_prompt("how many burglaries in Bengaluru East", db, TODAY)
+    assert "-> Unit.ROWID" in text
+    assert "-> Unit.UnitID" not in text
+    assert "rowid" in text.lower()
+
+
 def test_prompt_forbids_the_audit_table(db):
     assert "AuditLog" not in prompt.build_prompt("x", db, TODAY)
 

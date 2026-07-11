@@ -123,6 +123,10 @@ def _check_columns(select, aliases):
                 "unknown table alias: {0}".format(column.table)
             )
         table = aliases[column.table]
+        if column.name.upper() == "ROWID":
+            # Every table has one implicitly; joins must target it, not a
+            # parent's own business primary key (see catalog.describe()).
+            continue
         if column.name not in catalog.TABLES[table]:
             raise ValidationError(
                 "unknown column: {0}.{1}".format(table, column.name)

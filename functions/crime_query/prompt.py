@@ -44,6 +44,10 @@ _RULES = """Rules, all mandatory:
 8. Add a LIMIT. Never above 200.
 9. Use only the exact lookup values listed below. If the question names something not
    in those lists, choose the closest listed value.
+10. Every JOIN's ON condition must compare the foreign key column against the
+    parent table's ROWID pseudo-column, e.g. JOIN Unit ON CaseMaster.PoliceStationID
+    = Unit.ROWID. Never compare against the parent's own named primary-key column
+    (e.g. never Unit.UnitID), even though it is listed in the schema below.
 
 Return only the SQL. No explanation, no markdown fence."""
 

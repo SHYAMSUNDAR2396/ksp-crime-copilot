@@ -50,6 +50,21 @@ def test_lookup_only_query_needs_no_casemaster_anchor():
     assert validate.validate('SELECT District.DistrictName FROM District') is not None
 
 
+@pytest.mark.parametrize("rowid_spelling", ["ROWID", "rowid", "RowId"])
+def test_rowid_join_target_is_allowed_on_any_table(rowid_spelling):
+    """ZCQL Foreign Key columns reference the parent's internal ROWID, not
+    any business primary key -- confirmed against a live deployment. ROWID
+    isn't declared in catalog.TABLES for any table, so it needs its own
+    allowance in _check_columns, case-insensitively (real model output
+    varies case despite the prompt's uppercase convention)."""
+    sql = (
+        'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.{0} '
+        'GROUP BY Unit.UnitName LIMIT 10'
+    ).format(rowid_spelling)
+    assert validate.validate(sql) is not None
+
+
 def test_table_aliases_resolves_aliases_and_bare_names():
     ast = validate.validate(
         'SELECT cm.CrimeNo FROM CaseMaster cm '

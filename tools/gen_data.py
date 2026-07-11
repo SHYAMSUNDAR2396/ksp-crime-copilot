@@ -225,6 +225,31 @@ def _make_case(rng, case_id, unit_id, district_id, subhead_id, reg_date, lat, lo
 EMPLOYEES = _employees()
 
 
+def _remap_foreign_keys_to_rowid(conn):
+    """Rewrite every foreign-key column to hold the parent row's SQLite
+    rowid instead of its business primary key.
+
+    Catalyst's Data Store "Foreign Key" columns can only reference a
+    parent's platform-assigned ROWID, never a business key -- confirmed
+    against a live deployment. Shaping SQLite's data the same way means
+    the exact SQL the LLM generates (which always joins on ROWID, per
+    prompt.py's rules) runs correctly against SqliteDB in tests and
+    ZcqlDB in production, instead of diverging by backend.
+
+    Runs after every table is populated (all parent rows already have
+    their final rowid), and before CSV export in build() -- the CSVs
+    keep business-key values, since the live Catalyst import path remaps
+    them separately, once each relationship's real ROWIDs exist there.
+    """
+    for child, child_col, parent, parent_col in catalog.FOREIGN_KEYS:
+        conn.execute(
+            'UPDATE "{0}" SET "{1}" = ('
+            '  SELECT rowid FROM "{2}" WHERE "{2}"."{3}" = "{0}"."{1}"'
+            ')'.format(child, child_col, parent, parent_col)
+        )
+    conn.commit()
+
+
 def build(sqlite_path, csv_dir=None, seed=SEED):
     rng = random.Random(seed)
     if os.path.exists(sqlite_path):
@@ -359,6 +384,8 @@ def build(sqlite_path, csv_dir=None, seed=SEED):
         )
         counts[table] = len(rows)
     conn.commit()
+
+    _remap_foreign_keys_to_rowid(conn)
 
     if csv_dir:
         os.makedirs(csv_dir, exist_ok=True)

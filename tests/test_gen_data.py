@@ -128,6 +128,70 @@ def test_sensitive_columns_are_populated_not_null(built):
     assert null_castes == 0
 
 
+def test_foreign_keys_are_remapped_to_parent_rowid(built):
+    """Every FK column must hold the parent row's SQLite rowid, not its
+    business primary key, mirroring Catalyst's Foreign Key columns (which
+    can only reference a parent's platform ROWID). Checks every
+    relationship in catalog.FOREIGN_KEYS structurally: every non-null
+    child value must equal some row's rowid in the parent table."""
+    from functions.crime_query import catalog
+
+    conn, _, _ = built
+    for child, child_col, parent, _parent_col in catalog.FOREIGN_KEYS:
+        # Compare as strings: a TEXT-affinity column (e.g. Section.ActCode,
+        # declared VARCHAR) stores an inserted integer rowid as its text
+        # form ('1', not 1) per SQLite's affinity rules -- harmless for
+        # real queries (SQLite applies numeric affinity when comparing
+        # TEXT to INTEGER in a JOIN/WHERE), but str() here avoids a false
+        # mismatch from comparing raw Python int vs str representations.
+        parent_rowids = {str(row[0]) for row in conn.execute('SELECT rowid FROM "{0}"'.format(parent))}
+        child_values = {
+            str(row[0]) for row in conn.execute(
+                'SELECT DISTINCT "{0}" FROM "{1}" WHERE "{0}" IS NOT NULL'.format(child_col, child)
+            )
+        }
+        assert child_values <= parent_rowids, (
+            "{0}.{1} has values with no matching {2}.rowid: {3}".format(
+                child, child_col, parent, child_values - parent_rowids
+            )
+        )
+
+
+def test_foreign_key_remap_is_not_a_coincidental_no_op():
+    """Act's business key (ActCode) is text ('IPC'), so its rowid can never
+    coincidentally equal the pre-remap business-key value the way small
+    sequential-integer-keyed lookup tables (Unit, District, ...) do. This
+    proves the remap actually runs, not just that assertions happen to
+    still hold by accident."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    from functions.crime_query import catalog
+
+    conn.executescript(catalog.sqlite_ddl())
+    conn.execute('INSERT INTO "Act" (ActCode, ActDescription, ShortName, Active) '
+                 "VALUES ('IPC', 'Indian Penal Code', 'IPC', 1)")
+    conn.execute('INSERT INTO "Act" (ActCode, ActDescription, ShortName, Active) '
+                 "VALUES ('NDPS', 'Narcotic Drugs Act', 'NDPS', 1)")
+    conn.execute(
+        'INSERT INTO "ActSectionAssociation" '
+        '(CaseMasterID, ActID, SectionID, ActOrderID, SectionOrderID) '
+        "VALUES (1, 'NDPS', 'S1', 1, 1)"
+    )
+    conn.commit()
+
+    from tools.gen_data import _remap_foreign_keys_to_rowid
+    _remap_foreign_keys_to_rowid(conn)
+
+    # CaseMasterID itself gets remapped too (no matching CaseMaster row in
+    # this minimal fixture, so it becomes NULL) -- query the single row
+    # directly rather than filtering on a column that's also being remapped.
+    remapped = conn.execute('SELECT ActID FROM "ActSectionAssociation"').fetchone()[0]
+    ndps_rowid = conn.execute("SELECT rowid FROM \"Act\" WHERE ActCode = 'NDPS'").fetchone()[0]
+    assert remapped == ndps_rowid
+    assert remapped != "NDPS"
+
+
 def test_generation_is_byte_for_byte_reproducible(tmp_path):
     def digest(path):
         counts = gen_data.build(str(path / "crime.db"), csv_dir=str(path / "csv"))
