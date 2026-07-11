@@ -62,7 +62,7 @@ def test_append_audit_writes_a_row(db):
         ExecutedSQL="SELECT COUNT(*) FROM CaseMaster",
         CrimeNos="",
         RowCount=1,
-        Timestamp="2026-07-09T10:00:00",
+        LoggedAt="2026-07-09T10:00:00",
     )
     after = db.execute_raw('SELECT COUNT(*) AS n FROM "AuditLog"')[0]["n"]
     assert after == before + 1
@@ -84,7 +84,7 @@ def test_append_audit_on_closed_connection_raises_dberror(tmp_path):
             ExecutedSQL="SELECT 1",
             CrimeNos="",
             RowCount=0,
-            Timestamp="2026-07-09T10:00:00",
+            LoggedAt="2026-07-09T10:00:00",
         )
 
 
@@ -140,5 +140,5 @@ def test_zcql_append_audit_raises_dberror_on_failure():
             ExecutedSQL="SELECT 1",
             CrimeNos="",
             RowCount=0,
-            Timestamp="2026-07-09T10:00:00",
+            LoggedAt="2026-07-09T10:00:00",
         )

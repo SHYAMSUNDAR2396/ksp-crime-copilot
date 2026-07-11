@@ -221,5 +221,5 @@ CREATE TABLE IF NOT EXISTS "AuditLog" (
   "ExecutedSQL" TEXT,
   "CrimeNos" TEXT,
   "RowCount" INTEGER,
-  "Timestamp" TEXT
+  "LoggedAt" TEXT
 );

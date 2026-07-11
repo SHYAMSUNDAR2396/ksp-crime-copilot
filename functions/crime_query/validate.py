@@ -7,7 +7,10 @@ fed straight back to the model as a re-prompt hint.
 import sqlglot
 from sqlglot import exp
 
-from . import catalog
+try:
+    from . import catalog
+except ImportError:
+    import catalog
 
 MAX_LIMIT = 200
 

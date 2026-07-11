@@ -9,10 +9,16 @@ from dataclasses import dataclass, field
 
 from sqlglot import exp
 
-from . import prompt as prompt_module
-from . import rbac, validate
-from .db import DBError
-from .llm import LLMError, strip_fence
+try:
+    from . import prompt as prompt_module
+    from . import rbac, validate
+    from .db import DBError
+    from .llm import LLMError, strip_fence
+except ImportError:
+    import prompt as prompt_module
+    import rbac, validate
+    from db import DBError
+    from llm import LLMError, strip_fence
 
 CRIMENO_RE = re.compile(r"\b\d{18}\b")
 
@@ -108,7 +114,7 @@ def _audit(db, caller, question, generated, executed, citations, rows, now):
             ExecutedSQL=executed,
             CrimeNos=",".join(citations),
             RowCount=len(rows),
-            Timestamp=now.isoformat(),
+            LoggedAt=now.isoformat(),
         )
         return True
     except DBError:

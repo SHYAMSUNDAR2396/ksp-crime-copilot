@@ -8,8 +8,12 @@ from dataclasses import dataclass
 
 from sqlglot import exp
 
-from . import catalog
-from .validate import table_aliases
+try:
+    from . import catalog
+    from .validate import table_aliases
+except ImportError:
+    import catalog
+    from validate import table_aliases
 
 STATEWIDE_MAX_HIERARCHY = 2   # DGP, IGP
 DISTRICT_MAX_HIERARCHY = 4    # SP, Inspector

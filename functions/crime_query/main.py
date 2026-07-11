@@ -6,10 +6,20 @@ shape the response. Everything else is tested library code.
 import datetime as dt
 import os
 
-from . import agent, catalog, translate
-from .db import ZcqlDB
-from .llm import QuickMLLLM
-from .rbac import MASK
+try:
+    # Local/test context: main.py imported as functions.crime_query.main.
+    from . import agent, catalog, translate
+    from .db import ZcqlDB
+    from .llm import QuickMLLLM
+    from .rbac import MASK
+except ImportError:
+    # Catalyst runtime context: main.py loaded standalone via
+    # importlib.util.spec_from_file_location with no parent package,
+    # dependencies vendored flat alongside it.
+    import agent, catalog, translate
+    from db import ZcqlDB
+    from llm import QuickMLLLM
+    from rbac import MASK
 
 
 def _identifying_values(rows):

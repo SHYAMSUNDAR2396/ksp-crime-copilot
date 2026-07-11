@@ -4,8 +4,12 @@ The backend is chosen once, in main.py. Nothing here reads the environment.
 """
 import sqlite3
 
-from . import catalog
-from .rbac import Caller
+try:
+    from . import catalog
+    from .rbac import Caller
+except ImportError:
+    import catalog
+    from rbac import Caller
 
 
 class DBError(Exception):

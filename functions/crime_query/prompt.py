@@ -5,7 +5,10 @@ crime head or a station that does not exist in the data (PLAN.md 1.1).
 """
 import json
 
-from . import catalog
+try:
+    from . import catalog
+except ImportError:
+    import catalog
 
 LOOKUP_FIELDS = [
     ("CrimeHead", "CrimeGroupName"),

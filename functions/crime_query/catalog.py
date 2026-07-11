@@ -283,7 +283,7 @@ AUDIT_COLUMNS = {
     "ExecutedSQL": "TEXT",
     "CrimeNos": "TEXT",
     "RowCount": "INTEGER",
-    "Timestamp": "TEXT",
+    "LoggedAt": "TEXT",
 }
 
 _SQLITE_TYPES = {
