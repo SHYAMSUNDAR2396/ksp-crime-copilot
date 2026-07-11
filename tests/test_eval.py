@@ -37,6 +37,19 @@ def test_every_gold_query_returns_at_least_one_row(db, questions):
         assert rows, question["id"]
 
 
+def test_ipc_302_count_is_not_silently_zero(db, questions):
+    """Question 20 used to filter ActSectionAssociation.ActID = 'IPC'
+    directly -- a business-key literal against a column that now holds
+    Act's ROWID after the remap in tools/gen_data.py. Verified live: this
+    silently returned 0 instead of the correct 67. A COUNT query always
+    returns exactly one row even when the count itself is wrong, so
+    test_every_gold_query_returns_at_least_one_row can't catch this class
+    of bug -- this test checks the actual value."""
+    q20 = next(q for q in questions if q["id"] == 20)
+    rows = db.execute(q20["sql"])
+    assert rows[0]["n"] == 67
+
+
 def test_normalise_is_order_insensitive():
     a = [{"x": 1, "y": "b"}, {"x": 2, "y": "a"}]
     b = [{"x": 2, "y": "a"}, {"x": 1, "y": "b"}]
