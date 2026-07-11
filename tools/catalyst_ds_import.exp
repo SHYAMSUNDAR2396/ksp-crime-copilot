@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+# Drives catalyst ds:import / ds:export's interactive prompts, which do not
+# accept piped stdin (confirmed this session). Three modes:
+#   catalyst_ds_import.exp import <csv> <table> <config.json>
+#   catalyst_ds_import.exp status-download export <jobid>
+#   catalyst_ds_import.exp status-download import <jobid>
+set timeout 120
+set mode [lindex $argv 0]
+
+if {$mode == "import"} {
+    set csv [lindex $argv 1]
+    set table [lindex $argv 2]
+    set config [lindex $argv 3]
+    spawn catalyst ds:import $csv --table $table --config $config
+    expect "Select a bucket"
+    send "\r"
+    expect eof
+} elseif {$mode == "status-download"} {
+    set op [lindex $argv 1]
+    set jobid [lindex $argv 2]
+    spawn catalyst ds:status $op $jobid
+    expect "download the report"
+    send "y\r"
+    expect eof
+} else {
+    puts "unknown mode: $mode"
+    exit 1
+}
