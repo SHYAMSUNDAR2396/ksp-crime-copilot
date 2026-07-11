@@ -50,6 +50,19 @@ def test_ipc_302_count_is_not_silently_zero(db, questions):
     assert rows[0]["n"] == 67
 
 
+def test_accused_count_is_not_capped_at_casemaster_row_count(db, questions):
+    """Question 15 used to join Accused the wrong direction
+    (CaseMaster.CaseMasterID = Accused.rowid instead of
+    Accused.CaseMasterID = CaseMaster.rowid), which silently capped the
+    count at 5000 (CaseMaster's row count) instead of the correct 9880
+    (Accused has more rows than CaseMaster, since each case can have
+    1-3 accused) -- any Accused row with rowid > 5000 could never match.
+    Verified live against the seeded database."""
+    q15 = next(q for q in questions if q["id"] == 15)
+    rows = db.execute(q15["sql"])
+    assert rows[0]["n"] == 9880
+
+
 def test_normalise_is_order_insensitive():
     a = [{"x": 1, "y": "b"}, {"x": 2, "y": "a"}]
     b = [{"x": 2, "y": "a"}, {"x": 1, "y": "b"}]

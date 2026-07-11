@@ -67,30 +67,30 @@
   question: How many complainants are farmers?
   sql: >
     SELECT COUNT(ComplainantDetails.ComplainantID) AS n FROM CaseMaster
-    LEFT JOIN ComplainantDetails ON CaseMaster.CaseMasterID = ComplainantDetails.rowid
+    LEFT JOIN ComplainantDetails ON ComplainantDetails.CaseMasterID = CaseMaster.rowid
     LEFT JOIN OccupationMaster ON ComplainantDetails.OccupationID = OccupationMaster.rowid
     WHERE OccupationMaster.OccupationName = 'Farmer'
 - id: 13
   question: What is the average age of complainants?
   sql: >
     SELECT AVG(ComplainantDetails.AgeYear) AS n FROM CaseMaster
-    LEFT JOIN ComplainantDetails ON CaseMaster.CaseMasterID = ComplainantDetails.rowid
+    LEFT JOIN ComplainantDetails ON ComplainantDetails.CaseMasterID = CaseMaster.rowid
 - id: 14
   question: How many female victims are recorded?
   sql: >
     SELECT COUNT(Victim.VictimMasterID) AS n FROM CaseMaster
-    LEFT JOIN Victim ON CaseMaster.CaseMasterID = Victim.rowid
+    LEFT JOIN Victim ON Victim.CaseMasterID = CaseMaster.rowid
     WHERE Victim.GenderID = 2
 - id: 15
   question: How many accused persons are recorded across all cases?
   sql: >
     SELECT COUNT(Accused.AccusedMasterID) AS n FROM CaseMaster
-    LEFT JOIN Accused ON CaseMaster.CaseMasterID = Accused.rowid
+    LEFT JOIN Accused ON Accused.CaseMasterID = CaseMaster.rowid
 - id: 16
   question: How many arrests have been made?
   sql: >
     SELECT COUNT(ArrestSurrender.ArrestSurrenderID) AS n FROM CaseMaster
-    LEFT JOIN ArrestSurrender ON CaseMaster.CaseMasterID = ArrestSurrender.rowid
+    LEFT JOIN ArrestSurrender ON ArrestSurrender.CaseMasterID = CaseMaster.rowid
 - id: 17
   question: What is the most common type of crime?
   sql: >
@@ -138,7 +138,7 @@
   question: How many chargesheets of final report type A have been filed?
   sql: >
     SELECT COUNT(ChargesheetDetails.CSID) AS n FROM CaseMaster
-    LEFT JOIN ChargesheetDetails ON CaseMaster.CaseMasterID = ChargesheetDetails.rowid
+    LEFT JOIN ChargesheetDetails ON ChargesheetDetails.CaseMasterID = CaseMaster.rowid
     WHERE ChargesheetDetails.cstype = 'A'
 - id: 25
   question: What is the earliest case registration date?
@@ -160,7 +160,7 @@
   sql: >
     SELECT ComplainantDetails.ReligionID, COUNT(ComplainantDetails.ComplainantID) AS n
     FROM CaseMaster
-    LEFT JOIN ComplainantDetails ON CaseMaster.CaseMasterID = ComplainantDetails.rowid
+    LEFT JOIN ComplainantDetails ON ComplainantDetails.CaseMasterID = CaseMaster.rowid
     GROUP BY ComplainantDetails.ReligionID
 - id: 29
   question: How many non-heinous cases were registered in Mysuru district?
