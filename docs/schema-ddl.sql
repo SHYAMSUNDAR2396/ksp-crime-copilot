@@ -223,14 +223,3 @@ CREATE TABLE IF NOT EXISTS "AuditLog" (
   "RowCount" INTEGER,
   "Timestamp" TEXT
 );
-CREATE TABLE IF NOT EXISTS "AuditLog" (
-  "AuditID" INTEGER,
-  "EmployeeID" INTEGER,
-  "RankHierarchy" INTEGER,
-  "Question" TEXT,
-  "GeneratedSQL" TEXT,
-  "ExecutedSQL" TEXT,
-  "CrimeNos" TEXT,
-  "RowCount" INTEGER,
-  "Timestamp" TEXT
-);
