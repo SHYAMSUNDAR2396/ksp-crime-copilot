@@ -5,17 +5,16 @@ against `SqliteDB` and fakes. The steps below need a real Zoho Catalyst
 account/CLI, against project `crime-copilot` (function URL
 `https://crime-copilot-60075198995.development.catalystserverless.in/server/crime_query/`).
 
-**Status: Steps 1–2 done, Step 3 partially working (blocked on a real
-architectural gap, see below), Steps 4–5 open.** QuickML is live and wired
-up (auth, response parsing, thinking-trace stripping all fixed and
-confirmed against real calls — see the QuickML section below). The basic
-Q&A smoke test now gets as far as generating and validating correct SQL,
-but **fails at execution** because ZCQL JOINs need each relationship
-explicitly declared as a "Foreign Key" column type pointing at the parent
-table's internal `ROWID` — not at the parent's business primary key the
-way `docs/schema-ddl.sql` and every generated query assumes. This is a
-real architecture question, not a quick fix — see "Open gap: ZCQL
-relationships" below before doing anything else with Step 3.
+**Status: Steps 1–2 done. Step 3 was blocked on a real architectural
+gap (ZCQL relationships needing Foreign Key columns pointing at a
+parent's ROWID, not its business key) — resolved offline by teaching
+the whole system one consistent rule (every join targets ROWID; see
+"Open gap: ZCQL relationships" and the "Converting the remaining
+relationships" procedure below), with the live Catalyst side converted
+relationship-by-relationship using `tools/catalyst_fk_remap.py`.**
+Confirm Step 3's three smoke-test curls actually pass before treating
+this as fully closed — see "Re-verify Step 3's smoke tests" below.
+Steps 4–5 remain open pending that confirmation.
 
 ## 1. Task 2 — confirm the ZCQL/Data Store call surface — DONE
 
@@ -310,6 +309,92 @@ above under Step 1: `ds:import` 409s on a filename already uploaded to the
 Stratus bucket (copy the CSV under a new name to retry), and a table's
 primary-key-like column needs `"Is Unique"` toggled on before it can be
 used as an `upsert` `find_by` target.
+
+## Converting the remaining relationships (Task 5 of the 2026-07-11 ROWID plan)
+
+### Which relationships the demo actually needs
+
+Cross-referencing `catalog.FOREIGN_KEYS` (40 relationships) against every
+table `eval/questions.yaml` and the three Step 3 smoke-test queries join
+through, the following 17 relationships are exercised by the existing eval
+set + hardcoded paths. `Employee → Rank` (#37) is already converted; the
+remaining 16 need conversion:
+
+| # | Child → Parent | Used by |
+|---|---|---|
+| 2 | CaseMaster → Unit | eval Q3,5,6,18,27,29,30; smoke test |
+| 3 | CaseMaster → CaseCategory | eval Q22 |
+| 4 | CaseMaster → GravityOffence | eval Q8,29 |
+| 5 | CaseMaster → CrimeHead | eval Q11 |
+| 6 | CaseMaster → CrimeSubHead | eval Q2,3,4,17,19,30; smoke test |
+| 7 | CaseMaster → CaseStatusMaster | eval Q7,21; RBAC smoke test |
+| 8 | CaseMaster → Court | LLM can generate (not in eval set) |
+| 9 | ComplainantDetails → CaseMaster | eval Q12,13,28 |
+| 10 | ComplainantDetails → OccupationMaster | eval Q12 |
+| 13 | ActSectionAssociation → CaseMaster | eval Q20 |
+| 14 | ActSectionAssociation → Act | eval Q20 |
+| 15 | ActSectionAssociation → Section | eval Q20 |
+| 16 | Victim → CaseMaster | eval Q14 |
+| 17 | Accused → CaseMaster | eval Q15 |
+| 18 | ArrestSurrender → CaseMaster | eval Q16 |
+| 34 | Unit → District | eval Q6,27,29 |
+
+The remaining 23 relationships (e.g. ArrestSurrender → State/District/Unit/
+Employee/Court/Accused, Section → Act, CrimeHeadActSection, CrimeSubHead →
+CrimeHead, Court → District/State, District → State, Unit → UnitType/State,
+Employee → District/Unit/Designation, ChargesheetDetails → Employee,
+ComplainantDetails → ReligionMaster/CasteMaster) are not exercised by the
+current eval set, but the LLM could generate queries that use them. Convert
+them too if time permits — the automation script makes it mechanical; the
+risk is the console step taking longer than expected for some tables.
+
+### Per-relationship conversion procedure
+
+For each relationship identified above, repeat this sequence
+(the console step has no CLI path; everything else is `tools/catalyst_fk_remap.py`):
+
+1. **Console:** open the child table, delete the FK column, re-add it with
+   the same name, Data Type **Foreign Key**, Parent Table set to the
+   relationship's parent, On Delete **Null**.
+2. **Console:** if the child table's own primary-key-equivalent column
+   (used as `--child-pk` below) isn't already marked **Is Unique**, mark
+   it now — required for the automation script's `upsert` step.
+3. **Run the automation script:**
+   ```bash
+   python -m tools.catalyst_fk_remap \
+     --parent <ParentTable> --parent-col <ParentBusinessKeyColumn> \
+     --child <ChildTable> --child-col <ChildFKColumn> \
+     --child-pk <ChildUniqueColumn>
+   ```
+   Example, for `CaseMaster.PoliceStationID → Unit`:
+   ```bash
+   python -m tools.catalyst_fk_remap \
+     --parent Unit --parent-col UnitID \
+     --child CaseMaster --child-col PoliceStationID \
+     --child-pk CaseMasterID
+   ```
+4. **Verify:** `catalyst ds:export --table <ChildTable>` and spot-check a
+   few rows' remapped column against the parent's actual ROWID.
+
+`CaseMaster` is both a child (8 of its own columns are FKs) and a parent
+(referenced by `ComplainantDetails`, `Victim`, `Accused`, `ArrestSurrender`,
+`ActSectionAssociation`, `ChargesheetDetails`). Convert and remap all of
+`CaseMaster`'s own FK columns first — the tables that reference
+`CaseMaster.rowid` don't depend on `CaseMaster`'s own FK values, so order
+between those two groups doesn't matter, but doing `CaseMaster` first keeps
+the verification queries in Step 4 meaningful earlier.
+
+### Re-verify Step 3's smoke tests
+
+After every relationship in the list above is converted, re-run the three
+curls from Step 3. All three should now execute past the
+`ZCQL QUERY ERROR: No relationship between tables ...` failures seen
+earlier in this session. If a curl still fails with that exact error,
+a relationship was missed in the list above — check which table pair the
+error names and add it to the conversion sequence.
+
+Then run the Kannada parity spot-check (Step 4) and the live QuickML eval
+(Step 5) as originally documented.
 
 ## 4. Kannada parity spot-check (10 paired questions)
 
