@@ -45,7 +45,7 @@ The offline SQLite-side foundation is built and tested — 203 tests passing. Do
 - Consumes: `catalog.FOREIGN_KEYS` (already exists), `run_eval.load_questions()` (already exists), `run_eval.normalise()`/`score()` (already exist, unchanged).
 - Produces: nothing new consumed by later tasks — this task is a data fix plus a stronger regression guard.
 
-- [ ] **Step 1: Write the failing test proving question 20 is currently broken**
+- [x] **Step 1: Write the failing test proving question 20 is currently broken**
 
 In `tests/test_eval.py`, add:
 
@@ -63,7 +63,7 @@ def test_ipc_302_count_is_not_silently_zero(db, questions):
     assert rows[0]["n"] == 67
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_eval.py::test_ipc_302_count_is_not_silently_zero -v`
 Expected: FAIL — `assert 0 == 67`
