@@ -82,7 +82,7 @@ def test_sensitive_column_in_where_is_rejected_for_everyone():
             scoped(
                 'SELECT CaseMaster.CrimeNo FROM CaseMaster '
                 'LEFT JOIN ComplainantDetails '
-                'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+                'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
                 'WHERE ComplainantDetails.CasteID = 2',
                 caller,
             )
@@ -92,7 +92,7 @@ def test_sensitive_column_in_projection_is_redacted_for_constable():
     sql, redact = scoped(
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID',
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID',
         CONSTABLE,
     )
     assert redact == ["CasteID"]
@@ -103,7 +103,7 @@ def test_sp_aggregate_over_sensitive_column_is_not_redacted():
     _, redact = scoped(
         'SELECT ComplainantDetails.CasteID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.CasteID',
         SP,
     )
@@ -114,7 +114,7 @@ def test_sp_row_level_sensitive_column_is_still_redacted():
     _, redact = scoped(
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID',
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID',
         SP,
     )
     assert redact == ["CasteID"]
@@ -125,7 +125,7 @@ def test_inspector_aggregate_over_sensitive_column_is_rejected():
         scoped(
             'SELECT ComplainantDetails.ReligionID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
             'LEFT JOIN ComplainantDetails '
-            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+            'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
             'GROUP BY ComplainantDetails.ReligionID',
             INSPECTOR,
         )
@@ -136,7 +136,7 @@ def test_constable_aggregate_over_sensitive_column_is_rejected():
         scoped(
             'SELECT ComplainantDetails.ReligionID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
             'LEFT JOIN ComplainantDetails '
-            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+            'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
             'GROUP BY ComplainantDetails.ReligionID',
             CONSTABLE,
         )
@@ -146,7 +146,7 @@ def test_dgp_aggregate_over_sensitive_column_is_not_redacted():
     _, redact = scoped(
         'SELECT ComplainantDetails.CasteID, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.CasteID',
         DGP,
     )
@@ -163,7 +163,7 @@ def test_constable_cannot_infer_caste_distribution_by_group_position():
             'SELECT ComplainantDetails.CasteID, COUNT(CaseMaster.CaseMasterID) AS n '
             'FROM CaseMaster '
             'LEFT JOIN ComplainantDetails '
-            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+            'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
             'GROUP BY ComplainantDetails.CasteID',
             CONSTABLE,
         )
@@ -173,7 +173,7 @@ def test_redact_key_follows_the_alias():
     _, redact = scoped(
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID AS caste FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID',
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID',
         CONSTABLE,
     )
     assert redact == ["caste"]
@@ -202,7 +202,7 @@ def test_aggregate_over_sensitive_column_is_rejected_for_constable(func):
         scoped(
             'SELECT {0}(ComplainantDetails.CasteID) FROM CaseMaster '
             'LEFT JOIN ComplainantDetails '
-            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID'.format(func),
+            'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID'.format(func),
             CONSTABLE,
         )
 
@@ -216,7 +216,7 @@ def test_aggregate_over_sensitive_column_is_rejected_for_dgp(func):
         scoped(
             'SELECT {0}(ComplainantDetails.CasteID) FROM CaseMaster '
             'LEFT JOIN ComplainantDetails '
-            'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID'.format(func),
+            'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID'.format(func),
             DGP,
         )
 
@@ -231,7 +231,7 @@ def test_sp_group_by_crimeno_and_caste_is_redacted_not_exempted():
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, '
         'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY CaseMaster.CrimeNo, ComplainantDetails.CasteID',
         SP,
     )
@@ -246,9 +246,9 @@ def test_sp_group_by_lookup_table_and_caste_keeps_exemption():
         'SELECT CrimeSubHead.CrimeHeadName, ComplainantDetails.CasteID, '
         'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'LEFT JOIN CrimeSubHead '
-        'ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.CrimeSubHeadID '
+        'ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.ROWID '
         'GROUP BY CrimeSubHead.CrimeHeadName, ComplainantDetails.CasteID',
         SP,
     )
@@ -263,7 +263,7 @@ def test_aggregate_wrap_leak_is_closed_end_to_end(crime_db):
     sql = (
         'SELECT MIN(ComplainantDetails.CasteID) FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID'
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID'
     )
     ast = validate.validate(sql)
     for caller in (CONSTABLE, INSPECTOR, SP, DGP):
@@ -283,7 +283,7 @@ def test_sensitive_column_outside_group_by_is_redacted_even_when_caste_is_groupe
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, ComplainantDetails.ReligionID '
         'FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.CasteID',
         SP,
     )
@@ -298,7 +298,7 @@ def test_sensitive_column_outside_group_by_is_redacted_for_dgp_too():
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, ComplainantDetails.ReligionID '
         'FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.CasteID',
         DGP,
     )
@@ -313,7 +313,7 @@ def test_sp_group_by_both_sensitive_columns_keeps_both_clear():
         'SELECT ComplainantDetails.CasteID, ComplainantDetails.ReligionID, '
         'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.CasteID, ComplainantDetails.ReligionID',
         SP,
     )
@@ -330,7 +330,7 @@ def test_leak_c_closed_end_to_end(crime_db):
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, ComplainantDetails.ReligionID '
         'FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.CasteID'
     )
     ast = validate.validate(sql)
@@ -367,7 +367,7 @@ def test_token_group_by_leak_is_closed_end_to_end(crime_db):
         'SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID, '
         'COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
         'LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY CaseMaster.CrimeNo, ComplainantDetails.CasteID'
     )
     ast = validate.validate(sql)

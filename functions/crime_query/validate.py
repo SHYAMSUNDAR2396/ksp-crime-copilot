@@ -37,6 +37,13 @@ _ROOT_REJECT = (
 
 _ALLOWED_FUNC_TYPES = (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max)
 
+# Build lookup: (child_table, child_column) -> parent_table so _check_fk_join
+# can reject ON conditions that compare an FK column against the parent's
+# business primary key instead of ROWID.  ZCQL FK columns always store the
+# parent's ROWID; any other join target causes a ZCQL syntax error at
+# execution time.
+_FK_PARENT = {(child, col): parent for child, col, parent, _ in catalog.FOREIGN_KEYS}
+
 # In sqlglot 26.x, boolean connectors are modeled as Func subclasses
 # (`class And(Connector, Func)`, likewise Or and Xor), so find_all(exp.Func)
 # in _check_functions sees them too. AND/OR are portable to ZCQL and must be
@@ -181,6 +188,37 @@ def _check_joins(select, aliases):
         seen_tables.add(real_table)
 
 
+def _check_one_fk_side(fk_candidate, other, aliases):
+    table = aliases.get(fk_candidate.table, fk_candidate.table)
+    fk_key = (table, fk_candidate.name)
+    if fk_key not in _FK_PARENT:
+        return
+    parent = _FK_PARENT[fk_key]
+    other_table = aliases.get(other.table, other.table)
+    if other.name.upper() == "ROWID" and other_table == parent:
+        return
+    raise ValidationError(
+        "JOIN ON condition references {0}.{1} (a foreign key to {2}) "
+        "but pairs it with {3}.{4} instead of {2}.ROWID; "
+        "use ON {0}.{1} = {2}.ROWID".format(
+            table, fk_candidate.name, parent, other_table, other.name
+        )
+    )
+
+
+def _check_fk_join_conditions(select, aliases):
+    for join in select.args.get("joins") or []:
+        on = join.args.get("on")
+        if on is None:
+            continue
+        for eq in on.find_all(exp.EQ):
+            left, right = eq.left, eq.right
+            if not (isinstance(left, exp.Column) and isinstance(right, exp.Column)):
+                continue
+            _check_one_fk_side(left, right, aliases)
+            _check_one_fk_side(right, left, aliases)
+
+
 def _check_anchor(select, aliases):
     used = set(aliases.values())
     if used & catalog.CASE_SCOPED_TABLES and "CaseMaster" not in used:
@@ -266,6 +304,7 @@ def validate(sql):
     _check_tables(select)
     aliases = table_aliases(select)
     _check_joins(select, aliases)
+    _check_fk_join_conditions(select, aliases)
     _check_columns(select, aliases)
     _check_functions(select)
     _check_anchor(select, aliases)

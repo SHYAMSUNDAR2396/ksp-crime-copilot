@@ -59,7 +59,7 @@ def test_kannada_question_is_pivoted_and_answer_rendered_back(db):
 
     name_sql = (
         "SELECT CaseMaster.CrimeNo, Accused.AccusedName FROM CaseMaster "
-        "JOIN Accused ON Accused.CaseMasterID = CaseMaster.CaseMasterID "
+        "JOIN Accused ON Accused.CaseMasterID = CaseMaster.ROWID "
         "WHERE CaseMaster.PoliceStationID = 1 LIMIT 1"
     )
     accused_name = db.execute(name_sql)[0]["AccusedName"]

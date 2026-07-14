@@ -84,7 +84,7 @@ def test_sensitive_column_is_masked_for_constable(db):
     llm = FakeLLM([
         "SELECT CaseMaster.CrimeNo, ComplainantDetails.CasteID FROM CaseMaster "
         "LEFT JOIN ComplainantDetails "
-        "ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID LIMIT 5",
+        "ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID LIMIT 5",
         "ok",
     ])
     result = agent.answer("complainant castes", CONSTABLE, db, llm, TODAY, NOW)
@@ -95,7 +95,7 @@ def test_sp_aggregate_over_caste_is_not_masked(db):
     llm = FakeLLM([
         "SELECT ComplainantDetails.CasteID, COUNT(CaseMaster.CaseMasterID) AS n "
         "FROM CaseMaster LEFT JOIN ComplainantDetails "
-        "ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID "
+        "ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID "
         "GROUP BY ComplainantDetails.CasteID",
         "Distribution follows.",
     ])
@@ -128,7 +128,7 @@ def test_rbac_rejection_refuses_and_does_not_retry(db):
     llm = FakeLLM([
         "SELECT CaseMaster.CrimeNo FROM CaseMaster "
         "LEFT JOIN ComplainantDetails "
-        "ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID "
+        "ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID "
         "WHERE ComplainantDetails.CasteID = 2 LIMIT 5",
         "unused",
     ])

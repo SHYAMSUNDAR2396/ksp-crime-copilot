@@ -40,7 +40,7 @@ def test_count_star_is_rejected():
 def test_join_and_group_by_are_allowed():
     sql = (
         'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
-        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID '
         'GROUP BY Unit.UnitName ORDER BY n DESC LIMIT 10'
     )
     assert validate.validate(sql) is not None
@@ -68,7 +68,7 @@ def test_rowid_join_target_is_allowed_on_any_table(rowid_spelling):
 def test_table_aliases_resolves_aliases_and_bare_names():
     ast = validate.validate(
         'SELECT cm.CrimeNo FROM CaseMaster cm '
-        'LEFT JOIN Unit ON cm.PoliceStationID = Unit.UnitID LIMIT 5'
+        'LEFT JOIN Unit ON cm.PoliceStationID = Unit.ROWID LIMIT 5'
     )
     assert validate.table_aliases(ast) == {"cm": "CaseMaster", "Unit": "Unit"}
 
@@ -182,7 +182,7 @@ def test_interval_date_arithmetic_is_rejected():
     [
         (
             'SELECT Accused.AccusedName, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
-            'JOIN Accused ON Accused.CaseMasterID = CaseMaster.CaseMasterID '
+            'JOIN Accused ON Accused.CaseMasterID = CaseMaster.ROWID '
             'GROUP BY Accused.AccusedName LIMIT 5',
             'AccusedName',
         ),
@@ -193,7 +193,7 @@ def test_interval_date_arithmetic_is_rejected():
         ),
         (
             'SELECT Victim.VictimName, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
-            'JOIN Victim ON Victim.CaseMasterID = CaseMaster.CaseMasterID '
+            'JOIN Victim ON Victim.CaseMasterID = CaseMaster.ROWID '
             'GROUP BY Victim.VictimName LIMIT 5',
             'VictimName',
         ),
@@ -211,11 +211,11 @@ def test_aggregate_over_identifying_column_still_needs_crimeno(sql, identifying_
         'SELECT COUNT(CaseMaster.CaseMasterID) FROM CaseMaster',
         'SELECT District.DistrictName FROM District',
         'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) AS n FROM CaseMaster '
-        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID '
         'GROUP BY Unit.UnitName LIMIT 5',
         'SELECT ComplainantDetails.ReligionID, COUNT(CaseMaster.CaseMasterID) AS n '
         'FROM CaseMaster LEFT JOIN ComplainantDetails '
-        'ON CaseMaster.CaseMasterID = ComplainantDetails.CaseMasterID '
+        'ON ComplainantDetails.CaseMasterID = CaseMaster.ROWID '
         'GROUP BY ComplainantDetails.ReligionID',
     ],
 )
@@ -263,8 +263,8 @@ def test_explicit_self_join_is_rejected():
 def test_legitimate_multi_join_still_passes():
     sql = (
         'SELECT CaseMaster.CrimeNo FROM CaseMaster '
-        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '
-        'LEFT JOIN District ON Unit.DistrictID = District.DistrictID LIMIT 5'
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID '
+        'LEFT JOIN District ON Unit.DistrictID = District.ROWID LIMIT 5'
     )
     assert validate.validate(sql) is not None
 
@@ -307,8 +307,8 @@ def test_duplicate_case_scoped_table_still_rejected():
     with pytest.raises(ValidationError) as excinfo:
         validate.validate(
             'SELECT CaseMaster.CrimeNo FROM CaseMaster '
-            'JOIN Accused a1 ON CaseMaster.CaseMasterID = a1.CaseMasterID '
-            'JOIN Accused a2 ON CaseMaster.CaseMasterID = a2.CaseMasterID LIMIT 5'
+            'JOIN Accused a1 ON CaseMaster.ROWID = a1.CaseMasterID '
+            'JOIN Accused a2 ON CaseMaster.ROWID = a2.CaseMasterID LIMIT 5'
         )
     assert 'accused' in str(excinfo.value).lower()
     assert 'once' in str(excinfo.value).lower()
@@ -339,7 +339,7 @@ def test_multiple_ands_with_date_range_is_allowed():
     predicates including a date range."""
     sql = (
         'SELECT CaseMaster.CrimeNo FROM CaseMaster '
-        'LEFT JOIN CrimeSubHead ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.CrimeSubHeadID '
+        'LEFT JOIN CrimeSubHead ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.ROWID '
         "WHERE CrimeSubHead.CrimeHeadName = 'Burglary' "
         "AND CaseMaster.CrimeRegisteredDate >= '2026-01-09' "
         "AND CaseMaster.CrimeRegisteredDate <= '2026-07-09' LIMIT 50"
@@ -364,7 +364,7 @@ def test_xor_is_still_rejected():
 def test_having_with_and_is_allowed():
     sql = (
         'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
-        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID '
         'GROUP BY Unit.UnitName '
         'HAVING COUNT(CaseMaster.CaseMasterID) > 5 AND COUNT(CaseMaster.CaseMasterID) < 100 '
         'LIMIT 10'
@@ -389,9 +389,67 @@ def test_employee_joined_twice_is_allowed():
     sql = (
         'SELECT CaseMaster.CrimeNo, e1.FirstName, e2.FirstName '
         'FROM CaseMaster '
-        'LEFT JOIN Employee e1 ON CaseMaster.PolicePersonID = e1.EmployeeID '
-        'LEFT JOIN ArrestSurrender ON CaseMaster.CaseMasterID = ArrestSurrender.CaseMasterID '
-        'LEFT JOIN Employee e2 ON ArrestSurrender.IOID = e2.EmployeeID '
+        'LEFT JOIN Employee e1 ON CaseMaster.PolicePersonID = e1.ROWID '
+        'LEFT JOIN ArrestSurrender ON CaseMaster.ROWID = ArrestSurrender.CaseMasterID '
+        'LEFT JOIN Employee e2 ON ArrestSurrender.IOID = e2.ROWID '
         'LIMIT 5'
+    )
+    assert validate.validate(sql) is not None
+
+
+# --- FK-join target validation: ON must pair FK columns with parent ROWID ----
+@pytest.mark.parametrize(
+    "bad_sql,expected_fragment",
+    [
+        (
+            'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+            'JOIN CrimeSubHead ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.CrimeSubHeadID LIMIT 5',
+            'CrimeSubHead',
+        ),
+        (
+            'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+            'JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID LIMIT 5',
+            'Unit',
+        ),
+        (
+            'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+            'JOIN Accused ON Accused.CaseMasterID = CaseMaster.CrimeNo LIMIT 5',
+            'foreign key',
+        ),
+        (
+            'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) FROM CaseMaster '
+            'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.UnitID '
+            'LEFT JOIN District ON Unit.DistrictID = District.DistrictID LIMIT 5',
+            'Unit',
+        ),
+    ],
+)
+def test_fk_join_on_business_key_is_rejected(bad_sql, expected_fragment):
+    with pytest.raises(ValidationError, match=expected_fragment):
+        validate.validate(bad_sql)
+
+
+def test_fk_join_on_rowid_is_accepted():
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'JOIN CrimeSubHead ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.ROWID '
+        "WHERE CrimeSubHead.CrimeHeadName = 'Theft' LIMIT 5"
+    )
+    assert validate.validate(sql) is not None
+
+
+def test_fk_join_on_rowid_reversed_sides_is_accepted():
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        'JOIN CrimeSubHead ON CrimeSubHead.ROWID = CaseMaster.CrimeMinorHeadID '
+        "WHERE CrimeSubHead.CrimeHeadName = 'Theft' LIMIT 5"
+    )
+    assert validate.validate(sql) is not None
+
+
+def test_non_fk_join_condition_is_not_affected():
+    sql = (
+        'SELECT CaseMaster.CrimeNo FROM CaseMaster '
+        "WHERE CaseMaster.CrimeNo = 'KA012026000000001' LIMIT 5"
     )
     assert validate.validate(sql) is not None
