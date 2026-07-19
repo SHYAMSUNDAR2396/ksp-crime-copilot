@@ -107,7 +107,7 @@ def handler(request):
         os.environ["QUICKML_ORG_ID"],
     )
 
-    translator = translate.ZiaTranslator(app)
+    translator = translate.QuickMLTranslator(llm)
 
     payload = request.get_json(silent=True) or {}
     result = handle_question(payload, db, llm, translator, dt.date.today())

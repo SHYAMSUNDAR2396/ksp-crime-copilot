@@ -6,6 +6,11 @@ module doesn't decide what to protect -- main.py gathers names and crime
 numbers from the answer text and result rows and passes them in, because a
 crime number or accused name rendered in Kannada is an uncitable answer.
 """
+try:
+    from .llm import LLMError
+except ImportError:
+    from llm import LLMError
+
 KANNADA_RANGE = (0x0C80, 0x0CFF)
 KANNADA_SHARE_THRESHOLD = 0.15
 
@@ -67,21 +72,41 @@ class NullTranslator(object):
         return text
 
 
-class ZiaTranslator(object):
-    """Catalyst Zia. Confirm the SDK call against docs/catalyst-zcql-findings.md."""
+_LANGUAGE_NAMES = {"kn": "Kannada", "en": "English"}
 
-    def __init__(self, app):
-        self._zia = app.zia()
+_TRANSLATE_PROMPT = (
+    "Translate the following text from {source} to {target}. "
+    "Return only the translated text, with no explanation, quotes, or markdown.\n\n"
+    "{text}"
+)
+
+
+class QuickMLTranslator(object):
+    """Catalyst QuickML, prompted to translate.
+
+    Catalyst's Zia Services has no translation capability (confirmed against
+    docs.catalyst.zoho.com: Zia Services is Face Analytics/OCR/Identity
+    Scanner/Image Moderation/Object Recognition/Barcode Scanner/Text
+    Analytics only -- translation as a Zia feature exists in separate Zoho
+    products like Writer/WorkDrive, not in Catalyst). QuickML is already a
+    sanctioned Catalyst service and already wired up for NL->SQL and answer
+    composition, so it does double duty here via a plain prompt rather than
+    pulling in a non-Catalyst translation API.
+    """
+
+    def __init__(self, llm):
+        self._llm = llm
 
     def translate(self, text, source, target):
+        prompt = _TRANSLATE_PROMPT.format(
+            source=_LANGUAGE_NAMES.get(source, source),
+            target=_LANGUAGE_NAMES.get(target, target),
+            text=text,
+        )
         try:
-            result = self._zia.translate(text, source_language=source, target_language=target)
-        except Exception as err:
+            return self._llm.complete(prompt).strip()
+        except LLMError as err:
             raise TranslationError(str(err))
-        translated = result.get("translated_text") if isinstance(result, dict) else result
-        if not translated:
-            raise TranslationError("Zia returned an empty translation")
-        return translated
 
 
 def to_english(text, translator):

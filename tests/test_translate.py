@@ -1,6 +1,7 @@
 import pytest
 
 from functions.crime_query import translate
+from functions.crime_query.llm import FakeLLM
 
 KANNADA_Q = "ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?"
 CRIMENO = "104430006202600001"
@@ -162,3 +163,29 @@ def test_kannada_pivot_reaches_the_same_pipeline_input():
     assert kannada_result == "<en>{0}".format(KANNADA_Q)
     assert direct_result == english_input
     assert isinstance(kannada_result, str) and isinstance(direct_result, str)
+
+
+def test_quickml_translator_returns_the_completion():
+    llm = FakeLLM(["How many thefts?"])
+    result = translate.QuickMLTranslator(llm).translate(KANNADA_Q, "kn", "en")
+    assert result == "How many thefts?"
+
+
+def test_quickml_translator_prompt_names_the_languages_and_carries_the_text():
+    llm = FakeLLM(["ok"])
+    translate.QuickMLTranslator(llm).translate("hello", "en", "kn")
+    assert "English" in llm.prompts[0]
+    assert "Kannada" in llm.prompts[0]
+    assert "hello" in llm.prompts[0]
+
+
+def test_quickml_translator_strips_surrounding_whitespace():
+    llm = FakeLLM(["  padded answer  \n"])
+    result = translate.QuickMLTranslator(llm).translate("x", "en", "kn")
+    assert result == "padded answer"
+
+
+def test_quickml_translator_wraps_llm_error_as_translation_error():
+    llm = FakeLLM([])  # exhausted immediately -> LLMError
+    with pytest.raises(translate.TranslationError):
+        translate.QuickMLTranslator(llm).translate("hello", "en", "kn")

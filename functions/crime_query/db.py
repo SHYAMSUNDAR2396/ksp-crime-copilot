@@ -128,10 +128,17 @@ class ZcqlDB(object):
             raise DBError(str(err))
 
     def units_in_district(self, district_id):
+        # Unit.DistrictID is a Foreign Key column (see docs/CATALYST_RUNBOOK.md,
+        # "Open gap: ZCQL relationships") and stores District's ROWID, not its
+        # business DistrictID -- caller.district_id (from Employee.DistrictID,
+        # never converted) is the business key, so join through District to
+        # translate it. Comparing Unit.DistrictID against the raw business key
+        # directly always returns zero rows, which used to produce an empty
+        # `IN ()` predicate downstream -- invalid ZCQL syntax.
         rows = self.execute_raw(
-            "SELECT Unit.UnitID FROM Unit WHERE Unit.DistrictID = {0}".format(
-                int(district_id)
-            )
+            "SELECT Unit.UnitID FROM Unit "
+            "JOIN District ON Unit.DistrictID = District.ROWID "
+            "WHERE District.DistrictID = {0}".format(int(district_id))
         )
         # ZCQL returns UnitID as a string; sort numerically, not lexically
         # ("10" < "2"), and convert so the RBAC IN(...) predicate gets ints.
