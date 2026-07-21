@@ -5,15 +5,18 @@ Platform: Zoho Catalyst (mandated) · Data: schema provided ([Police_FIR_ER_Diag
 
 Companion strategy document: [Technical Report](KSP-Datathon2026-Conversational-AI-Technical-Report.html). This plan supersedes the report's §04–§08 architecture wherever the real schema contradicts it.
 
+Current production implementation plan: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md) and [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md).
+
 ---
 
 ## 1. Revised architecture (schema-grounded)
 
-The provided schema is a fully relational CCTNS-style model: 23 tables centred on `CaseMaster`, with the **only free text in `CaseMaster.BriefFacts`** and geo as `latitude`/`longitude`. There are **no phone, vehicle, address, or bank-account entities, and no cross-case person IDs**. Three consequences drive everything below:
+The provided schema is a fully relational CCTNS-style model: 23 tables centred on `CaseMaster`, with the **only free text in `CaseMaster.BriefFacts`** and geo as `latitude`/`longitude`. There are **no phone, vehicle, address, or bank-account entities, and no cross-case person IDs**. Four consequences drive everything below:
 
 1. **NL→SQL is the primary engine.** "Burglaries in Bengaluru East in the last 6 months" is a structured query, not a RAG question.
 2. **Document RAG shrinks to `BriefFacts`** — semantic "find similar cases" over case narratives.
 3. **The graph must be *derived*.** With no person master table, hidden links come from entity resolution on names, shared IOs, shared act-sections, and geo proximity.
+4. **Execution is supervisor-led and multi-agent.** A supervisor decomposes each request or proactive event into typed capability tasks, fans out independent specialists in parallel, merges their evidence, and sends only verified claims to composition.
 
 ### 1.0 Architecture & data flow (Catalyst service map)
 
@@ -31,15 +34,19 @@ flowchart TB
     GW["authZ · throttle · audit hook"]
   end
 
-  subgraph LOGIC["AGENTIC LOGIC — Circuits + Functions"]
-    ORCH["Orchestrator<br/>(Circuits / Function)"]
-    FQ["NL→SQL Agent"]
-    FR["Retrieval Agent"]
+  subgraph LOGIC["AGENTIC CONTROL PLANE — Supervisor + Specialist Functions"]
+    SUP["Supervisor Agent<br/>task graph · fan-out · deadlines"]
+    CTX["Typed TaskContext<br/>shared EvidenceBundles"]
+    FQ["Structured Query Agent<br/>NL→SQL · validate"]
+    FR["Narrative Retrieval Agent<br/>RAG · cross-lingual MO"]
     FG["Graph Agent<br/>traversal · community · centrality"]
     FA["Analytics Agent<br/>trend · forecast · hotspot"]
-    FV["Verify + Cite Agent"]
-    FT["Translate Agent"]
+    FS["Silent-Match Agent<br/>score · deduplicate · route"]
+    FV["Verification + Citation Agent"]
+    FC["Composition Agent"]
+    FT["Translation Agent"]
     FP["Profile + Prevention Agent"]
+    FL["Legal Deadline Agent<br/>(future capability)"]
   end
 
   subgraph AI["INTELLIGENCE — QuickML + Zia + SmartBrowz"]
@@ -56,25 +63,33 @@ flowchart TB
     ST[("Stratus<br/>PDF / blob store")]
   end
 
-  CRON["Cron / Job Scheduling<br/>rebuild edge tables · refresh forecasts"]
+  CRON["Cron / Job Scheduling<br/>edge rebuild · MO index · alerts · forecasts"]
+  EVENT["Post-ingestion event<br/>completed FIR"]
 
   VOICE --> UI
-  UI --> AUTHN --> GW --> ORCH
-  ORCH --> FQ & FR & FG & FA & FV & FT & FP
+  UI --> AUTHN --> GW --> SUP
+  EVENT --> SUP
+  SUP --> CTX
+  CTX -. parallel evidence tasks .-> FQ & FR & FG & FA & FS & FP & FL
+  FQ & FR & FG & FA & FS & FP & FL --> CTX
+  CTX --> FV --> FC --> FT --> UI
   FQ --> DS
   FR --> RAG
+  FR --> DS
   FG --> DS
   FA --> PIPE
   FA --> DS
+  FS --> DS
   FT --> ZIA
+  FC --> LLM
   FP --> LLM
   FQ --> LLM
   FV --> LLM
   RAG --> DS
   FP --> PDF --> ST
-  ORCH --> CA
+  SUP --> CA
   GW -. audit .-> DS
-  CRON --> DS
+  CRON --> SUP
 ```
 
 **Request data flow** — one question, end to end, with the service handling each step.
@@ -83,22 +98,20 @@ flowchart TB
 flowchart LR
   IN["Utterance<br/>voice / text · KN or EN"] --> STT["Speech→text<br/>Web Speech / Zia"]
   STT --> AUTHZ["API Gateway<br/>authenticate + role scope"]
-  AUTHZ --> LANG["Detect + pivot to English<br/>(Translate Agent · Zia)"]
+  AUTHZ --> LANG["Detect + pivot to English<br/>(Translation Agent · Zia)"]
   LANG --> CTX{"Follow-up?"}
   CTX -- yes --> MEM[("Cache<br/>prior filters")]
-  CTX -- no --> INTENT
-  MEM --> INTENT["Classify intent<br/>(Orchestrator)"]
-  INTENT -- aggregate/filter --> SQLQ["NL→SQL + validate<br/>→ Data Store"]
-  INTENT -- similar/narrative --> RET["QuickML RAG<br/>→ BriefFacts"]
-  INTENT -- link/network --> GRP["Graph traversal<br/>→ edge tables"]
-  INTENT -- trend/predict --> ANL["QuickML pipelines<br/>DBSCAN · forecast"]
-  SQLQ --> FUSE["Fuse + rerank"]
-  RET --> FUSE
-  GRP --> FUSE
-  ANL --> FUSE
-  FUSE --> COMP["Compose answer<br/>Qwen 2.5-14B"]
-  COMP --> VER["Verify claims →<br/>attach CrimeNo citations"]
-  VER --> BACK["Render in user's language<br/>IDs/names verbatim"]
+  CTX -- no --> SUP["Supervisor Agent<br/>classify task + build fan-out"]
+  MEM --> SUP
+  SUP --> TASKS["Typed TaskContext<br/>caller scope · deadline · citation policy"]
+  TASKS -. relevant agents in parallel .-> SQLQ["Structured Query Agent<br/>NL→SQL + validate"]
+  TASKS -. relevant agents in parallel .-> RET["Narrative Retrieval Agent<br/>QuickML RAG + MO Matcher"]
+  TASKS -. relevant agents in parallel .-> GRP["Graph Agent<br/>edge traversal"]
+  TASKS -. relevant agents in parallel .-> ANL["Analytics Agent<br/>DBSCAN · forecast"]
+  SQLQ & RET & GRP & ANL --> ENV["EvidenceBundles<br/>claims · citations · confidence · limits"]
+  ENV --> VER["Verification + Citation Agent<br/>merge · conflict check · RBAC"]
+  VER --> COMP["Composition Agent<br/>Qwen 2.5-14B"]
+  COMP --> BACK["Translation Agent<br/>IDs/names verbatim"]
   BACK --> OUT["Answer + citations<br/>(+ voice, + PDF on request)"]
   AUTHZ -. every request .-> AUD[("Audit log<br/>Data Store")]
   VER -. result set .-> AUD
@@ -111,16 +124,56 @@ flowchart LR
 | Web Client Hosting | Chat UI, graph/map views, PDF download |
 | Authentication | Login; role derived from `Rank.Hierarchy` + `Employee.UnitID`/`DistrictID` |
 | API Gateway | Zero-trust authZ, throttling, audit hook on every call |
-| Circuits / Functions | Orchestration + the agents (NL→SQL, retrieval, graph, analytics, verify, translate, profile/prevention) |
+| Circuits / Functions | Supervisor, typed task context, specialist agents, retries, and evidence verification |
 | QuickML LLM Serving | Qwen 2.5-14B — SQL generation, answer composition, profiling |
 | QuickML RAG + Knowledge Base | Semantic search over `BriefFacts` with citation breakdown |
 | QuickML Pipelines | DBSCAN hotspots, time-series forecast, anomaly early-warning |
 | Zia | Language detect/normalise, OCR for legacy scans, voice STT fallback |
 | SmartBrowz | Conversation history → PDF |
-| Data Store | 23 schema tables + derived edge tables + append-only audit log |
+| Data Store | 23 schema tables + derived edge tables + MO index + silent-match alerts + append-only audit log |
 | Cache | Per-session conversation context for follow-ups |
 | Stratus | Blob/PDF storage |
-| Cron / Job Scheduling | Nightly edge-table rebuild, periodic forecast refresh |
+| Cron / Job Scheduling | Edge-table rebuild, MO index refresh, batch alert scans, and forecast refresh |
+
+### 1.0.1 Supervisor contract and typed evidence
+
+The supervisor is the control plane for both conversational requests and
+proactive events. It does not answer questions or perform domain scoring. It
+creates a request-scoped `TaskContext` containing:
+
+- request/event id, task type, original utterance or anchor case id;
+- caller identity, RBAC scope, language state, and citation policy;
+- active conversation filters from Cache;
+- total deadline, per-agent timeout, retry budget, and selected capabilities.
+
+Relevant specialists run concurrently and return a typed `EvidenceBundle`:
+
+```text
+EvidenceBundle {
+  agent_name,
+  status,
+  claims[],
+  rows_or_entities[],
+  citations[],
+  evidence_signals[],
+  confidence,
+  limitations[],
+  index_or_model_version,
+  elapsed_ms
+}
+```
+
+The supervisor merges bundles, detects conflicts, rechecks RBAC, and passes
+only accepted claims to the Verification + Citation Agent. Contradictions are
+reported in `limitations[]`; they are never silently averaged. The Composition
+Agent receives verified claims only, and the Translation Agent renders the
+final answer while preserving names and `CrimeNo`s verbatim.
+
+For proactive work, the same contract is invoked by a post-ingestion Function
+or Cron. `SilentMatchAgent` consumes structured, identity, graph, and semantic
+bundles, applies the bounded evidence scorer, and writes durable alert state.
+The future `Legal Deadline Agent` uses the same contract but is not part of the
+current committed feature set until its own spec is approved.
 
 ### 1.1 Structured layer (primary)
 
@@ -132,7 +185,10 @@ flowchart LR
 ### 1.2 Semantic layer (secondary)
 
 - `BriefFacts` chunked **one chunk per case** (narratives are summary-length) into **QuickML Knowledge Base**, each chunk prefixed with metadata: `CrimeNo`, CaseMasterID, district, station, crime head, registered date.
-- QuickML RAG handles "what happened in this case" and "find cases similar to this MO"; hits join back to structured rows via CaseMasterID for enrichment and citation.
+- `Narrative Retrieval Agent` handles "what happened in this case" through QuickML RAG and delegates cross-lingual similar-case retrieval to the provider-neutral `MoMatcher` service.
+- `MoMatcher` indexes Kannada, English, and mixed-language `BriefFacts` in one shared embedding space, returns top accessible cases with original sentence excerpts and controlled MO concepts, and records model/index versions.
+- `SilentMatchAgent` consumes `mo_similarity` only as bounded evidence (maximum 10 points); semantic similarity alone can never create an alert.
+- All hits join back to structured rows via `CaseMasterID` for RBAC, enrichment, and `CrimeNo` citation.
 
 ### 1.3 Relationship layer (derived graph)
 
@@ -149,24 +205,45 @@ Built at ingestion as Data Store tables (Catalyst has no native graph DB — sam
 - **Traversal in Catalyst Functions**: k-hop neighbourhood of a person node; shortest path between two cases; "who connects these FIRs".
 - **Entity resolution is the linchpin and the biggest accuracy risk** — thresholds tuned on seeded synthetic variants in the data generator. Every resolved link carries a match-confidence surfaced in the answer ("possible same person, name variant").
 
-### 1.4 Query routing — two retrieval regimes
+### 1.4 Query routing — supervisor task graphs
 
-The orchestrator classifies intent and routes to one of two regimes. This is the core design decision: **GraphRAG is reserved for pattern discovery and network analysis; everyday NL crime-data querying uses NL→SQL + traditional RAG.**
+The Supervisor Agent classifies the task, selects the smallest relevant set of
+specialists, and fans them out concurrently. The old two-regime distinction is
+retained as task profiles, not as separate linear pipelines:
 
-**Regime A — NL crime-data querying (NL→SQL + traditional RAG).** The conversational Q&A surface. Two modes under one chat:
-- *Aggregate / filter / exact-fact* → **NL→SQL** over Data Store (§1.1). Handles "how many", date ranges, station/district filters, joins — the things retrieval cannot count or filter reliably.
-- *Semantic / narrative / "find similar"* → **traditional RAG** over `BriefFacts` (§1.2): embed → retrieve top-k → compose with citations.
-- Mixed questions run both and merge (structured rows + narrative context), citing CrimeNos.
+**Structured task profile:** `Structured Query Agent` generates and validates
+NL→SQL over Data Store for counts, filters, dates, joins, and exact facts.
 
-**Regime B — GraphRAG (pattern discovery + criminal network analysis, §1.7).** For link/pattern/network questions the pipeline fuses the graph in:
+**Narrative task profile:** `Narrative Retrieval Agent` runs QuickML RAG for
+case narratives and `MoMatcher` for cross-lingual similar-case retrieval.
+
+**Relationship task profile:** `Structured Query Agent`, `Graph Agent`, and
+`Narrative Retrieval Agent` run in parallel. The graph agent expands derived
+edges; the narrative agent reranks `BriefFacts`; the verifier checks the edge
+and `CrimeNo` citations together.
+
+**Mixed task profile:** all independent structured, semantic, graph, and
+analytics evidence producers run concurrently, then return typed
+`EvidenceBundle`s to the verifier. An agent is omitted when its capability is
+not required by the task.
+
+**Proactive task profile:** a post-ingestion event or Cron creates a task with
+an anchor case or date window. `SilentMatchAgent` combines structured,
+identity, graph, and semantic bundles and persists a deduplicated alert. The
+same scanner contract supports both live and replayable batch execution.
+
+GraphRAG remains the fusion behavior for link/network questions, but it is
+implemented as a supervisor task graph:
 
 ```
-structured filter (SQL) → graph neighbourhood expansion (edge tables §1.3)
-→ BriefFacts semantic rerank (traditional RAG) → compose (Qwen)
-→ answer citing CrimeNos + the specific edges used
+Supervisor → SQL + graph + BriefFacts/MO agents in parallel
+→ typed EvidenceBundles → conflict/RBAC/citation verification
+→ composition → answer with CrimeNo + edge citations
 ```
 
-The distinction: Regime A retrieves *documents/rows* to answer a question; Regime B additionally traverses *relationships* to surface connections no single row states. Routing is one branching Function — Circuits adopted only if a Catalyst capability spike shows it beats a plain Function (ponytail: one Function that branches may be all we need).
+The supervisor uses Catalyst Function orchestration for short tasks and
+Catalyst Circuits for durable fan-out, retries, or long-running work. No agent
+can bypass validation, RBAC, or citation verification.
 
 ### 1.5 RBAC, masking, audit (mapped to real tables)
 
@@ -179,14 +256,16 @@ The distinction: Regime A retrieves *documents/rows* to answer a question; Regim
 
 ### 1.6 Kannada bridge, voice & conversation features
 
-- **Translate–reason–translate**: detect language → pivot to English for NL→SQL and reasoning → render answer back in Kannada, names/CrimeNos preserved verbatim.
-- **Voice interaction**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; after that it is just another typed message into the same pipeline. Spike Kannada coverage in-browser early; fall back to a Zia/STT service, then to typed-only (cut line).
-- **Context-aware conversations**: Catalyst Cache keyed by session, holding the active filters from the last turn (date range, station, crime type, case IDs). The orchestrator reads it before building the next query, so "now just the two-wheelers" narrows the previous result.
+- **Translate–reason–translate**: the Translation Agent detects language, pivots to English for specialist reasoning, and renders verified output back in Kannada; names and CrimeNos are preserved verbatim.
+- **Voice interaction**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; after that it enters the Supervisor Agent as a normal request. Spike Kannada coverage in-browser early; fall back to a Zia/STT service, then to typed-only (cut line).
+- **Context-aware conversations**: Catalyst Cache keyed by session holds active filters and the prior verified task context. The Supervisor reads it before building the next task graph, so "now just the two-wheelers" narrows the previous result.
 - **PDF export of conversation history**: transcript + citations already exist in Cache/audit; a SmartBrowz Function renders them to PDF on request. No new data path.
 
 ### 1.7 Analytics & prediction layer
 
-All of these are Functions/pipelines over tables already being built — no new services.
+All of these are supervisor-dispatched specialist tasks over tables already
+being built. Long-running or proactive tasks use Catalyst Circuits/Cron; short
+tasks use Catalyst Functions. No non-Catalyst service is introduced.
 
 | Capability | Implementation |
 |---|---|
@@ -199,48 +278,51 @@ All of these are Functions/pipelines over tables already being built — no new 
 | **Socio-demographic insights** | NL→SQL aggregates over `ComplainantDetails`/`Victim`/`Accused` demographics (age, gender, occupation; religion/caste only as aggregates to analyst/SP roles). **Guardrail: caste/religion are never features in any predictive or scoring model.** |
 | **Behavioral profiling** | Per `PersonNode`: assemble all linked cases (sections, times, geo, `BriefFacts`), Qwen composes a cited narrative profile — "common thread" summary, not a black-box score. |
 | **Proactive prevention intelligence** | Synthesis briefing for command roles: rising-trend hotspots joined with active repeat offenders nearby ("burglaries in this cluster 40% above baseline; 2 repeat offenders with cases in range"). Decision-support only, fully logged, never an automated trigger. |
+| **Cross-jurisdiction silent-match alerts** | Post-ingestion or Cron creates a supervisor task; structured, identity, graph, and cross-lingual MO agents run in parallel; `SilentMatchAgent` scores bounded evidence, deduplicates by alert type + unordered case pair, routes to authorized case owners and district command, and exposes the same durable alert in inbox/chat. |
+| **Statutory deadline risk** | Reserved `Legal Deadline Agent` contract for BNSS 60/90-day calculations; not in the current committed feature set until its own legal/data spec is approved. Missing dates/classification must yield `unknown`, never a guessed deadline. |
 
 ### 1.8 Capability data-flow diagrams
 
-Each of the five analytics capabilities has its own pipeline. All read from the same Data Store tables and edge tables (§1.1, §1.3) — only the routing differs.
+Each capability is a supervisor task graph. Independent evidence producers run
+in parallel, return typed `EvidenceBundle`s, and converge at the same
+verification/citation gate. All read from the same Data Store tables, derived
+edges, MO index, and operational alert tables (§1.1-§1.3).
 
-**Crime pattern discovery** (GraphRAG, Regime B)
+**Crime pattern discovery**
 
 ```mermaid
 flowchart LR
-  Q["NL question<br/>(pattern/trend)"] --> INT["Orchestrator:<br/>classify → Regime B"]
-  INT --> SQLF["SQL filter<br/>crime type · time · place<br/>(Data Store)"]
-  SQLF --> GEXP["Graph neighbourhood expansion<br/>PersonNode + Edge* (repeat offenders)"]
-  SQLF --> DBS["DBSCAN spatial clusters<br/>(QuickML pipeline)"]
-  GEXP --> RAG["BriefFacts semantic rerank<br/>(QuickML RAG) — MO similarity"]
-  DBS --> FUSE
-  RAG --> FUSE["Fuse: structured + graph + semantic"]
-  FUSE --> COMP["Compose pattern summary<br/>(Qwen 2.5-14B)"]
-  COMP --> CITE["Attach CrimeNo + edge citations"]
-  CITE --> OUT["Answer: pattern + supporting cases"]
+  Q["NL question<br/>(pattern/trend)"] --> SUP["Supervisor<br/>task graph"]
+  SUP -. parallel .-> SQL["Structured Query Agent<br/>filter + aggregates"]
+  SUP -. parallel .-> GRAPH["Graph Agent<br/>edges + neighbourhood"]
+  SUP -. parallel .-> MO["Narrative Retrieval Agent<br/>BriefFacts + MO matcher"]
+  SUP -. parallel .-> HOT["Analytics Agent<br/>DBSCAN clusters"]
+  SQL & GRAPH & MO & HOT --> ENV["EvidenceBundles"]
+  ENV --> VERIFY["Verification + Citation<br/>conflict/RBAC gate"]
+  VERIFY --> COMP["Composition Agent"]
+  COMP --> OUT["Answer + CrimeNo/edge citations"]
 ```
 
-**Criminal network analysis** (GraphRAG, Regime B)
+**Criminal network analysis**
 
 ```mermaid
 flowchart LR
-  Q["NL question<br/>(link/network)"] --> RES["Resolve entity →<br/>PersonNode (entity resolution)"]
-  RES --> TRAV["k-hop traversal +<br/>shortest path (Functions)"]
-  TRAV --> EDGES[("Edge tables<br/>same_person_in · investigated_by ·<br/>charged_under · near")]
-  TRAV --> COMM["Community detection +<br/>centrality (NetworkX Function)"]
-  COMM --> SUBG["Subgraph assembled<br/>(nodes + edges + scores)"]
-  SUBG --> CTX["Pull BriefFacts + case rows<br/>for each node (Data Store)"]
-  CTX --> COMP["Compose network narrative<br/>(Qwen 2.5-14B)"]
-  COMP --> VIZ["Render network graph<br/>(frontend force-directed view)"]
-  COMP --> CITE["Cite CrimeNos + edges used"]
+  Q["NL question<br/>(link/network)"] --> SUP["Supervisor"]
+  SUP -. parallel .-> RES["Entity Resolution Agent<br/>PersonNode candidates"]
+  SUP -. parallel .-> EDGES["Graph Agent<br/>k-hop + paths"]
+  SUP -. parallel .-> COMM["Graph Analytics Agent<br/>community + centrality"]
+  RES & EDGES & COMM --> VERIFY["Verification + Citation<br/>edge/RBAC gate"]
+  VERIFY --> COMP["Composition Agent"]
+  COMP --> VIZ["Subgraph response<br/>for frontend visualization"]
+  COMP --> CITE["CrimeNo + edge citations"]
 ```
 
 **Socio-demographic insights**
 
 ```mermaid
 flowchart LR
-  Q["NL question<br/>(demographic aggregate)"] --> RBAC["RBAC check<br/>(Rank/Unit scope)"]
-  RBAC --> SQLQ["NL→SQL agent<br/>(Qwen 2.5-14B)"]
+  Q["NL question<br/>(demographic aggregate)"] --> SUP["Supervisor<br/>RBAC + task graph"]
+  SUP --> SQLQ["Structured Query Agent<br/>NL→SQL"]
   SQLQ --> VALID["Validate against<br/>table/column allowlist"]
   VALID --> MASK{"Caller rank ≥<br/>threshold?"}
   MASK -- no --> AGGONLY["Force aggregate-only query<br/>(no row-level caste/religion)"]
@@ -248,7 +330,7 @@ flowchart LR
   AGGONLY --> RUN
   FULLQ --> RUN["Execute group-by<br/>ComplainantDetails/Victim/Accused<br/>× CrimeHead/District (Data Store)"]
   RUN --> GUARD["Guardrail check:<br/>no individual identification,<br/>never feeds a scoring model"]
-  GUARD --> COMP["Compose descriptive summary<br/>(Qwen 2.5-14B)"]
+  GUARD --> COMP["Composition Agent<br/>descriptive summary"]
   COMP --> OUT["Answer + filter citation"]
 ```
 
@@ -256,13 +338,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  Q["NL question<br/>('profile this accused')"] --> RES["Resolve identity →<br/>PersonNode"]
-  RES --> LINK["Pull all linked cases<br/>via EdgePersonCase"]
-  LINK --> FEAT["Gather features per case:<br/>ActSection · CrimeSubHead ·<br/>IncidentFromDate hour · Gravity · geo"]
-  LINK --> TEXT["Pull BriefFacts<br/>per linked case (Data Store)"]
-  FEAT --> COMMON["Extract common thread<br/>(shared sections/time/MO)"]
-  TEXT --> COMMON
-  COMMON --> COMP["Compose cited narrative profile<br/>(Qwen 2.5-14B)"]
+  Q["NL question<br/>('profile this accused')"] --> SUP["Supervisor"]
+  SUP -. parallel .-> RES["Entity Resolution Agent<br/>PersonNode"]
+  SUP -. parallel .-> LINK["Graph Agent<br/>linked cases"]
+  SUP -. parallel .-> TEXT["Narrative Retrieval Agent<br/>BriefFacts + MO"]
+  RES & LINK & TEXT --> COMMON["EvidenceBundles<br/>common sections/time/MO"]
+  COMMON --> VERIFY["Verification + Citation"]
+  VERIFY --> COMP["Composition Agent<br/>cited narrative profile"]
   COMP --> FLAG["Tag: decision-support summary,<br/>not a risk score"]
   FLAG --> OUT["Profile + CrimeNo citations<br/>per linked case"]
 ```
@@ -271,17 +353,34 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  TRIG["Trigger:<br/>scheduled (Cron) or on-demand"] --> TREND["Trend/forecast pipeline<br/>(QuickML time-series/anomaly)<br/>counts per station × crime-type"]
-  TREND --> THRESH{"Actual/forecast ><br/>baseline threshold?"}
+  TRIG["Trigger:<br/>Cron or on-demand"] --> SUP["Supervisor<br/>proactive task graph"]
+  SUP -. parallel .-> TREND["Analytics Agent<br/>forecast + anomaly"]
+  SUP -. parallel .-> HOT["Analytics Agent<br/>DBSCAN hotspot"]
+  SUP -. parallel .-> NET["Graph Agent<br/>nearby repeat offenders"]
+  TREND & HOT & NET --> THRESH{"Actual/forecast ><br/>baseline threshold?"}
   THRESH -- no --> IDLE["No alert"]
-  THRESH -- yes --> HOT["Identify hotspot cluster<br/>(DBSCAN)"]
-  HOT --> NET["Query network layer:<br/>repeat offenders / PersonNodes<br/>with cases near cluster"]
-  NET --> MERGE["Merge trend + network findings"]
+  THRESH -- yes --> MERGE["EvidenceBundles<br/>trend + hotspot + network"]
   MERGE --> RBACG["RBAC gate:<br/>command roles only (SP/Crime Branch)"]
-  RBACG --> COMP["Compose briefing<br/>(Qwen 2.5-14B)"]
+  RBACG --> COMP["Verification + Composition Agents"]
   COMP --> LOG["Log to audit<br/>(Data Store)"]
   COMP --> OUT["Briefing card / PDF<br/>(SmartBrowz)"]
 ```
+
+**Cross-lingual MO matching and silent-match alerts**
+
+```mermaid
+flowchart LR
+  TRIG["Completed FIR event<br/>or Cron date window"] --> SUP["Supervisor<br/>proactive task graph"]
+  SUP -. parallel .-> STRUCT["Structured Query Agent<br/>candidate cases"]
+  SUP -. parallel .-> ID["Entity Resolution Agent<br/>name/age/gender"]
+  SUP -. parallel .-> MO["Narrative Retrieval Agent<br/>Kannada-English MO matcher"]
+  SUP -. optional .-> GRAPH["Graph Agent<br/>derived edge enrichment"]
+  STRUCT & ID & MO & GRAPH --> SCORE["Silent-Match Agent<br/>bounded weighted scorer"]
+  SCORE --> DEDUP["Alert repository<br/>upsert + evidence history"]
+  DEDUP --> ROUTE["Recipient routing<br/>case owners + command"]
+  ROUTE --> SURFACE["Durable inbox + shared chat card"]
+  SCORE --> CITE["CrimeNo + evidence citations"]
+ ```
 
 ---
 
@@ -289,9 +388,12 @@ flowchart LR
 
 **Committed (must demo):**
 
+*Multi-agent execution foundation*
+0. Supervisor Agent with typed `TaskContext`/`EvidenceBundle`, capability-based parallel fan-out, verification/citation gate, bounded retries, and backward-compatible response shaping
+
 *Core conversational platform*
-1. NL question → cited answer (NL→SQL + validation + CrimeNo citations), English + Kannada
-2. Voice-enabled interaction (Web Speech API over the same pipeline)
+1. NL question → cited answer (NL→SQL + validation + CrimeNo citations), English + Kannada, through the Supervisor Agent
+2. Voice-enabled interaction (Web Speech API entering the supervised task graph)
 3. Context-aware multi-turn conversations (Catalyst Cache session state)
 4. PDF export of conversation history (SmartBrowz)
 5. Explainable answers + immutable audit trail
@@ -306,17 +408,21 @@ flowchart LR
 12. Socio-demographic insights (demographic aggregates, guardrailed)
 13. Behavioral profiling (cited per-person narrative from linked cases)
 14. Proactive prevention briefing (trend + network synthesis for command roles)
+15. Cross-lingual Kannada-English MO matching for similar-case search and alert evidence
+16. Cross-jurisdiction silent-match alerts with batch replay and post-ingestion live scan
 
 **Cut lines (pre-agreed degradations, invoke without debate if a feature is at risk of not being demo-ready):**
 | Feature at risk | Degrade to |
 |---|---|
 | Voice input | Typed Kannada only |
 | Fuzzy entity resolution | Exact normalised-name match (synthetic data guarantees matches) |
-| GraphRAG fusion into one answer | Graph panel rendered *alongside* the RAG answer |
+| Multi-agent fusion into one answer | Return the strongest verified specialist result with explicit limitations |
 | Community detection / centrality | k-hop traversal + path-finding only |
 | Predictive forecasts | Descriptive trend charts (actuals vs. baseline, no forecast) |
 | Prevention briefing | Two separate views (hotspot map + repeat-offender list) instead of one synthesis |
 | Behavioral profile | Raw linked-case list without the composed narrative |
+| Cross-lingual MO index | Structured candidate matching plus same-language lexical evidence; no semantic alert contribution |
+| Live silent-match trigger | Nightly/replayable batch scan using the same scanner contract |
 | PDF export | Print-to-PDF from the browser |
 
 ---
@@ -331,11 +437,15 @@ flowchart LR
 | Qwen Kannada generation weak | High (known) | Kannada answers garbled | English-pivot bridge is the design; names/IDs passed through verbatim |
 | QuickML RAG has no chat history | Certain (known) | — | Multi-turn context is app-layer by design: session state in Catalyst Cache (§1.6) |
 | QuickML quotas/latency too tight for live demo | Med | Early Catalyst capability check | Cache pre-staged demo queries; trim dataset; recorded backup |
+| Specialist fan-out exceeds latency or Catalyst concurrency limits | Med | p95 task latency or throttling during rehearsal | Capability-based dispatch, per-agent deadlines, bounded parallelism, Cache for repeated evidence, Circuits for durable retries, and a verified partial-result policy |
+| Specialist evidence conflicts | Med | SQL, graph, or narrative bundles disagree | Typed EvidenceBundle conflict detection; verifier rejects unsupported claims and exposes limitations |
+| Agent boundary leaks sensitive fields | Med | Privacy regression tests or audit review | RBAC at dispatch and merge; caste/religion exclusion tests; no free-form agent-to-agent state |
+| Live and batch silent-match paths diverge | Med | Same fixture produces different alert score | One SilentMatchScanner contract; parity test runs both `date_window` and `anchor_case_id` modes |
 | Demo-day connectivity failure | Low | — | Recorded backup demo (mandatory) |
 | Synthetic data looks fake to jury | Med | Q&A | Schema is the *official* one; say so — "runs unchanged on real CCTNS rows" |
 | Web Speech API lacks Kannada STT in target browser | Med | Voice spike | Zia/STT service fallback; cut line → typed Kannada |
 | Forecasts meaningless on synthetic data | High | Eval | Seed the generator with deliberate trends/seasonality so forecasts have signal; present as capability demo, not validated prediction |
-| 14 committed features overload the team | High | Any checkpoint slip | Cut lines above are per-feature and pre-agreed; core platform (items 1–6) always outranks analytics (7–14) |
+| 16 committed features overload the team | High | Any checkpoint slip | Cut lines above are per-feature and pre-agreed; supervisor foundation and core platform (items 0–6) outrank analytics and proactive intelligence (7–16) |
 | Profiling/demographics read as discriminatory | Med | Jury Q&A | Guardrails are in the design (§1.7): no person risk scores, caste/religion never model features, aggregates only — say so proactively |
 
 ---
@@ -351,6 +461,7 @@ flowchart LR
 6. **Behavioral profile** — click a repeat offender → cited narrative profile: preferred sections, time-of-day, MO summary from `BriefFacts`.
 7. **Explainability** — click any citation → the exact CaseMaster row and BriefFacts excerpt.
 8. **Audit + export** — open the audit viewer (every query logged), then one click → PDF of the whole conversation.
+9. **Cross-jurisdiction silent match** — replay a completed bilingual FIR, show parallel structured/entity/MO evidence, deliver one deduplicated alert to both authorized case sides, and mark it `Linked` with a note.
 
 **Metrics (report §12 trimmed to what 2 weeks can prove, shown as a slide + live eval script):**
 - SQL correctness on the 30-question labelled set (target ≥ 85%)
@@ -358,12 +469,19 @@ flowchart LR
 - Recall@5 for similar-case retrieval on seeded MO pairs
 - p95 end-to-end latency (target < 8 s)
 - Kannada parity spot-check: 10 paired KN/EN questions, same answers
+- Specialist bundle completion rate and p95 supervisor latency
+- Evidence conflict rate and unsupported-claim rejection rate
+- Batch/live silent-match parity on seeded case pairs
+- Alert deduplication rate under repeated live events
 
 ---
 
 ## 5. Definition of done
 
-- All 14 committed features pass in a full run-through **on Catalyst, not localhost** (cut-line degradations count as passing if invoked per §2).
+- Supervisor dispatch, typed evidence envelopes, verification, and backward-compatible responses pass contract and failure-path tests.
+- All 16 committed features pass in a full run-through **on Catalyst, not localhost** (cut-line degradations count as passing if invoked per §2).
+- Batch and post-ingestion live silent-match scans produce identical evidence for identical fixtures and do not duplicate alerts.
+- Cross-lingual MO matches return original Kannada/English excerpts, both `CrimeNo`s, and model/index version.
 - Recorded backup demo exists.
 - Eval numbers computed and on the slide.
 - Every table/column referenced in code exists in [Police_FIR_ER_Diagram.md](Police_FIR_ER_Diagram.md) — no invented schema.
