@@ -1,14 +1,15 @@
 # Cross-Jurisdiction Silent-Match Alerts Design
 
-Date: 2026-07-18
+Date: 2026-07-21
 Project: KSP Crime Copilot
-Status: Approved for implementation planning
+Status: Approved for written-spec review
 
 ## Goal
 
-Build the first proactive intelligence feature for KSP Crime Copilot: a
-replayable batch alert system that finds likely links between newly registered
-or recently scanned FIRs and cases in other police stations or districts.
+Build the first proactive intelligence feature for KSP Crime Copilot: one
+deterministic alert engine that finds likely links between a completed FIR and
+cases in other police stations or districts through both replayable batch
+scans and event-ready single-case scans.
 
 The first version must be deterministic, explainable, role-scoped, and
 demo-safe. It should not require the full graph layer to exist first, but it
@@ -23,7 +24,7 @@ replayable batch command in development, scans anchor FIRs and persists durable
 alerts when a case appears related to another case outside the anchor police
 station.
 
-The system supports two alert types:
+The first implementation supports two alert types:
 
 - `possible_same_person`: evidence suggests an accused in the anchor case may
   be the same person as an accused in a different case.
@@ -37,22 +38,25 @@ workflow.
 
 ## Trigger Strategy
 
-The design supports an event-ready product story but implements the reliable
-path first.
+The alert engine exposes one scanner contract:
 
-Initial implementation:
+```text
+scan(date_window | anchor_case_id) -> alert upserts + recipient actions
+```
 
-- A replayable batch scan selects anchor cases by a date window.
-- In production this maps to Catalyst Cron.
-- In local development and demos the same scanner can be run for a chosen
-  window so the alert moment is deterministic.
+The batch path supplies a date window and is invoked by Catalyst Cron or a
+local replay command. The live path supplies one `anchor_case_id` after FIR
+ingestion completes. Both paths use the same candidate selection, scorer,
+deduplication, recipient routing, and persistence code.
 
-Later trigger, using the same scanner interface:
+The live trigger runs only after the required case-side data is available:
+`CaseMaster`, accused records, act/section associations, crime type, station,
+district, and `BriefFacts` when present. If related records arrive separately,
+the trigger waits and retries through the enrichment flow described below.
 
-- A Data Store insert or post-ingestion Function can call the same scanner for
-  one anchor case when FIR registration events are available.
-- The scanner API should therefore accept both a date window and an explicit
-  anchor case id.
+The first implementation does not require `PersonNode` or any graph edge table.
+When graph evidence is available later, it enriches the same alert's
+`EvidenceJSON` and does not introduce a second lifecycle.
 
 ## Data Model
 
@@ -79,6 +83,9 @@ Required fields:
 - `Status`
 - `Summary`
 - `EvidenceJSON`
+- `DetectionSource`
+- `LastEvaluatedAt`
+- `LastScanRunID`
 - `GeneratedAt`
 - `UpdatedAt`
 
@@ -127,19 +134,25 @@ Required fields:
 - `SilentMatchActionID`
 - `SilentMatchAlertID`
 - `ActorEmployeeID`
+- `ActionType`
 - `FromStatus`
 - `ToStatus`
 - `Note`
+- `PreviousScore`
+- `PreviousConfidenceBand`
+- `EvidenceSnapshotJSON`
 - `CreatedAt`
 
 `Linked` and `Dismissed` actions require a non-empty note. Notes are audit text,
-not chat messages.
+not chat messages. Re-evaluation inserts an `evidence_updated` action with the
+previous score, confidence band, and evidence snapshot; status transition
+actions use the same table with `ActionType = status_changed`.
 
 ## Match Candidate Selection
 
 The scanner first narrows the search space with structured filters:
 
-1. Load anchor cases in the scan window, or the explicit anchor case.
+1. Load anchor cases in the scan window, or the explicit completed anchor case.
 2. For each anchor, select prior candidate cases outside the anchor station.
 3. Prefer candidates in a different district for higher demo impact, but allow
    cross-station same-district matches because those are still operationally
@@ -154,6 +167,25 @@ The first implementation must not depend on a graph database or external vector
 store. It uses deterministic text similarity over `BriefFacts` locally. QuickML
 RAG can replace only the `mo_similarity` signal later, without changing alert
 storage or workflow.
+
+## Deduplication And Re-evaluation
+
+Deduplicate by alert type and the unordered pair of
+`AnchorCaseMasterID`/`MatchedCaseMasterID`. This prevents batch and live paths
+from creating separate alerts for the same pair. The stored anchor remains the
+case that first produced the alert, while the pair is treated as undirected for
+deduplication.
+
+On a repeat detection, recompute the complete evidence set and update the
+current score, confidence band, summary, `EvidenceJSON`, `DetectionSource`,
+`LastEvaluatedAt`, and `LastScanRunID`. Before updating, insert an
+`evidence_updated` action containing the previous score, confidence band, and
+full previous evidence snapshot. Do not duplicate existing recipient rows.
+
+Keep recipient `Seen` state unless a new recipient is added. A refreshed alert
+does not silently reopen `Linked` or `Dismissed`; it records an evidence-update
+action and surfaces the update to authorized recipients. An officer may move
+the alert back to `Reviewing` explicitly.
 
 ## Scoring Rules
 
@@ -294,6 +326,51 @@ Transitions:
 `Linked` and `Dismissed` require a note. The system should reject an empty note
 for those transitions.
 
+## Recipients And Notification
+
+Recipients are generated from existing case ownership and command hierarchy:
+
+- Anchor-side operational recipient: `CaseMaster.PolicePersonID`, when present
+  and visible.
+- Matched-side operational recipient: `ArrestSurrender.IOID`, when present and
+  visible.
+- District command recipients: active employees with
+  `Rank.Hierarchy <= 3` in each involved district.
+- Statewide command recipients: alerts spanning districts or alerts within an
+  explicitly authorized district filter.
+
+The live path creates the same durable `SilentMatchRecipient` rows as batch
+mode. The alert detail endpoint rechecks access to both cases before returning
+evidence. If an employee lacks access to either case, the alert is not shown
+to that employee.
+
+The inbox is the source of truth. Chat renders a card containing alert type,
+confidence, both `CrimeNo`s, stations, districts, compact evidence, status,
+and a link to the shared alert detail. It does not create an independent
+notification or lifecycle record.
+
+## Reliability And Failure Handling
+
+The live trigger is asynchronous and idempotent.
+
+- Duplicate ingestion events are safe because the scanner upserts by alert
+  type and case pair.
+- If accused, section, or narrative records are not ready, the trigger records
+  `pending_enrichment` and retries with bounded backoff.
+- If enrichment remains incomplete after the retry window, the scanner emits
+  only evidence-supported alerts or skips alert creation with an auditable
+  reason.
+- Missing `BriefFacts` or unavailable semantic matching never blocks identity
+  and structured scoring.
+- Graph rebuild failure never blocks live or batch alerts.
+- Recipient creation retries independently, so notification failure cannot
+  duplicate an alert.
+- Each run records its run id, source (`batch` or `live`), anchor count,
+  candidate count, alert count, skipped cases, duration, and failure reasons.
+
+Run metadata must distinguish "no match found" from "matching not attempted"
+and "matching attempted with incomplete evidence."
+
 ## Testing Requirements
 
 Tests should prove correctness, auditability, and RBAC safety.
@@ -302,9 +379,13 @@ Required coverage:
 
 - scorer tests for both alert types,
 - tests explaining why a candidate did or did not meet threshold,
-- batch scan tests that generate deterministic alerts from seeded synthetic
-  data,
+- batch and single-anchor live scan tests that produce identical alerts from
+  identical seeded data,
+- duplicate-trigger tests proving idempotent upsert behavior,
+- re-evaluation tests proving evidence updates preserve append-only history and
+  do not silently reopen terminal statuses,
 - recipient-routing tests for anchor side, matched side, and command users,
+- enrichment retry and partial-evidence tests,
 - lifecycle tests for valid transitions and required notes,
 - action-history tests proving events are append-only,
 - RBAC read tests proving recipients can see their alerts and unrelated users
@@ -323,16 +404,20 @@ The synthetic data generator should seed a small set of deliberate cases:
 The demo flow:
 
 1. Replay or register a new FIR.
-2. Run the batch scan for the selected window.
-3. Show the alert appearing in the inbox and chat card.
+2. Trigger the live scanner after ingestion completes.
+3. Show the alert appearing in both authorized users' inboxes and the chat
+   card.
 4. Open the alert detail panel and explain the evidence.
-5. Mark the alert `Reviewing` or `Linked` with an audit note.
+5. Run the batch scanner over the same period and show that it creates no
+   duplicate.
+6. Refresh evidence, rerun, and show the score/history update.
+7. Mark the alert `Reviewing` or `Linked` with an audit note.
 
 ## Out Of Scope
 
-- Full graph materialization and graph traversal APIs.
-- Real-time Data Store trigger integration.
+- Graph-gated alert generation and full graph traversal APIs.
 - Full officer collaboration, assignment, or messaging.
+- SMS, email, WhatsApp, or Telegram delivery.
 - Predictive offender scoring.
 - Use of caste or religion as features.
 - External vector database or non-Catalyst services.
@@ -342,6 +427,9 @@ The demo flow:
 - Alert tables are operational tables, like `AuditLog`. They must be created by
   local DDL and Catalyst Data Store setup, but kept out of the NL-to-SQL query
   allowlist so the LLM cannot freely query operational alert history.
+- The same scanner must accept either a date window or a single completed
+  anchor case. Catalyst Cron invokes the former; a post-ingestion Function
+  invokes the latter.
 - Command recipients are active employees with `Rank.Hierarchy <= 3` in each
   involved district. Statewide ranks receive the alert only when the alert spans
   districts or when their explicit inbox filter includes that district.
