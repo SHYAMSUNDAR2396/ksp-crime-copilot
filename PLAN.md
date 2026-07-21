@@ -5,7 +5,7 @@ Platform: Zoho Catalyst (mandated) · Data: schema provided ([Police_FIR_ER_Diag
 
 Companion strategy document: [Technical Report](KSP-Datathon2026-Conversational-AI-Technical-Report.html). This plan supersedes the report's §04–§08 architecture wherever the real schema contradicts it.
 
-Current production implementation plan: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md) and [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md).
+Current production implementation plans: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md) and [Rank-Derived Capability RBAC](docs/superpowers/plans/2026-07-21-rank-derived-capability-rbac.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md), [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md), and [rank-derived capability RBAC](docs/superpowers/specs/2026-07-21-rank-derived-capability-rbac-design.md).
 
 ---
 
@@ -247,12 +247,62 @@ can bypass validation, RBAC, or citation verification.
 
 ### 1.5 RBAC, masking, audit (mapped to real tables)
 
-- Roles come from the schema itself: `Rank.Hierarchy` + `Employee.UnitID`/`DistrictID`. Demo logins are rows in `Employee`.
-  - **Constable**: cases of own station (`Unit`) only; caste/religion columns masked.
-  - **Inspector/IO**: own district, full person detail, graph access.
-  - **SP**: district-wide aggregates and trends.
-- Masking of DPDP-sensitive fields (`CasteID`, `ReligionID` on complainants) enforced in the serving Function, not the UI.
-- **Audit**: every query → append-only Data Store table (who, role, question, generated SQL, CrimeNos returned, timestamp) + a simple viewer page.
+Authority comes only from `Rank.Hierarchy`, `Employee.UnitID`, and
+`Employee.DistrictID`; no separate role or permissions table is introduced.
+Lower `Rank.Hierarchy` means higher authority. The supervisor resolves an
+immutable `AccessContext` for every request and proactive event:
+
+```text
+AccessContext {
+  employee_id, rank_hierarchy, access_bucket,
+  unit_ids, district_ids, capabilities[],
+  sensitive_data_policy, alert_actions[], audit_visibility
+}
+```
+
+The rank-derived buckets are:
+
+| Bucket | Scope |
+|---|---|
+| Constable | Own police station |
+| SI/IO | Own district and assigned investigation context |
+| Inspector | Own district and district intelligence |
+| SP/Command | District-wide command intelligence and approved aggregates |
+| DGP/Statewide | Statewide intelligence and cross-district operations |
+
+Capabilities are default-denied and control both specialist dispatch and
+resource/action access:
+
+| Capability | Constable | SI/IO | Inspector | SP/Command | DGP/Statewide |
+|---|---|---|---|---|---|
+| Structured/narrative/similar-case reads | Own station | District | District | District | Statewide |
+| Graph/network view | Denied | District | District | District | Statewide |
+| Cross-jurisdiction alert visibility | Denied | Visible assigned cases | District | District | Statewide |
+| Alert review | Denied | Assigned/visible cases | District | District | Statewide |
+| Alert disposition | Denied | Assigned cases | District | District | Statewide |
+| Batch scan | Denied | Denied | Denied | Approved district | Approved statewide |
+| Live scan | Denied | Own assigned case | District case | District | Statewide |
+| Deadline-risk view | Own cases | Assigned cases | District | District | Statewide |
+| Conversation export | Own session | Own session | Own session | Own session | Own session |
+| Audit view | Own actions | Own actions | District actions | District audit | Statewide summary |
+
+Enforcement occurs at every boundary: API Gateway authentication, supervisor
+agent selection, specialist resource loading, EvidenceBundle merge, verifier
+citation checks, and response/action serialization. `allowed_units()` and the
+existing AST masking policy remain the hard row and sensitive-field boundary;
+capabilities decide whether an operation may start.
+
+Use stable policy errors: `CAPABILITY_DENIED`, `SCOPE_DENIED`,
+`SENSITIVE_FIELD_DENIED`, and `ACTION_DENIED`. Denials return no case
+identifier, `CrimeNo`, name, excerpt, graph node, or alert score and are
+append-only audit events. Alert visibility and alert disposition are separate;
+`Linked` and `Dismissed` still require a non-empty note. Audit viewers are
+themselves limited to own-action, district, or statewide summary scope.
+
+Masking of DPDP-sensitive fields (`CasteID`, `ReligionID` on complainants) is
+enforced in the serving Function, not the UI, and is never relaxed by a
+capability grant. Caste/religion never enter semantic text, graph features,
+alert scoring, summaries, exports, or audit logs.
 
 ### 1.6 Kannada bridge, voice & conversation features
 
