@@ -38,3 +38,21 @@ def test_repository_deduplicates_unordered_pairs_and_preserves_dispositions(tmp_
 def test_operational_tables_are_fixed_reads_not_nl_catalog():
     assert "SilentMatchAlert" in catalog.OPERATIONAL_TABLES
     assert "SilentMatchAlert" not in catalog.TABLES
+
+
+def test_evidence_update_keeps_previous_snapshot_and_score(tmp_path):
+    path = tmp_path / "history.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(catalog.sqlite_ddl())
+    conn.commit(); conn.close()
+    db = db_module.SqliteDB(str(path))
+    repo = SilentMatchRepository(db)
+    anchor, candidate = _case(1, "Ravi Kumar", 1), _case(2, "Ravi K", 2)
+    score = score_candidate(anchor, candidate)
+    first = repo.upsert_alert(score, anchor, candidate, "run-1", "now")
+    repo.upsert_alert(score, candidate, anchor, "run-2", "later")
+    action = db.execute_raw('SELECT * FROM "SilentMatchAction" ORDER BY ActionID DESC')[0]
+    assert action["ActionType"] == "evidence_updated"
+    assert action["PreviousScore"] == first["Score"]
+    assert action["PreviousConfidenceBand"] == first["ConfidenceBand"]
+    assert action["EvidenceSnapshotJSON"]

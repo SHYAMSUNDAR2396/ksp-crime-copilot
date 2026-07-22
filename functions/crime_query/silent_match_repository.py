@@ -15,7 +15,12 @@ class SilentMatchRepository:
         evidence = json.dumps(dict(score.evidence), sort_keys=True)
         if existing:
             row = existing[0]
-            self.append_action(row["AlertID"], "evidence_updated", evidence, 0, now)
+            self.append_action(
+                row["AlertID"], "evidence_updated", "evidence re-evaluated", 0, now,
+                previous_score=row["Score"],
+                previous_band=row["ConfidenceBand"],
+                evidence_snapshot=row.get("EvidenceSnapshotJSON", "{}"),
+            )
             self.db.execute_write(
                 'UPDATE "SilentMatchAlert" SET Score = ?, ConfidenceBand = ?, EvidenceJSON = ?, '
                 'EvidenceSnapshotJSON = ?, SourceRunID = ?, UpdatedAt = ? WHERE AlertID = ?',
@@ -31,10 +36,15 @@ class SilentMatchRepository:
         )
         return self.get_alert(alert_id)
 
-    def append_action(self, alert_id, action, note, employee_id, now):
+    def append_action(self, alert_id, action, note, employee_id, now,
+                      previous_score=None, previous_band=None,
+                      evidence_snapshot="{}"):
         self.db.execute_write(
-            'INSERT INTO "SilentMatchAction" (AlertID, Action, Note, EmployeeID, CreatedAt) VALUES (?, ?, ?, ?, ?)',
-            (alert_id, action, note, employee_id, now),
+            'INSERT INTO "SilentMatchAction" '
+            '(AlertID, ActionType, Note, EmployeeID, CreatedAt, PreviousScore, '
+            'PreviousConfidenceBand, EvidenceSnapshotJSON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (alert_id, action, note, employee_id, now, previous_score,
+             previous_band, evidence_snapshot),
         )
         if action in ("Seen", "Linked", "Dismissed"):
             current = self.get_alert(alert_id)

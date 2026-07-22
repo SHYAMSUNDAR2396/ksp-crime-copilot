@@ -28,10 +28,13 @@ CREATE TABLE IF NOT EXISTS SilentMatchRecipient (
 CREATE TABLE IF NOT EXISTS SilentMatchAction (
   ActionID INTEGER PRIMARY KEY AUTOINCREMENT,
   AlertID INTEGER NOT NULL,
-  Action TEXT NOT NULL,
+  ActionType TEXT NOT NULL,
   Note TEXT NOT NULL,
   EmployeeID INTEGER NOT NULL,
-  CreatedAt TEXT NOT NULL
+  CreatedAt TEXT NOT NULL,
+  PreviousScore INTEGER,
+  PreviousConfidenceBand TEXT,
+  EvidenceSnapshotJSON TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS SilentMatchRun (
   RunID TEXT PRIMARY KEY,
