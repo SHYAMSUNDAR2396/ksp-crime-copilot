@@ -200,3 +200,22 @@ def test_voice_question_uses_text_path_and_persists_citations(db):
     assert result["voice"]["text"]
     assert result["citations"]
     assert store.load("voice-session", 9).turns[0].citations == tuple(result["citations"])
+
+
+def test_typed_session_follow_up_reuses_prior_verified_context(db):
+    llm = FakeLLM([SQL, "First.", SQL, "Follow-up."])
+    store = InMemoryConversationStore()
+    first = main.handle_session_question(
+        {"employee_id": 9, "session_id": "text-session", "turn_id": 1,
+         "question": "recent cases"},
+        db, llm, translate.NullTranslator(), TODAY, store,
+    )
+    second = main.handle_session_question(
+        {"employee_id": 9, "session_id": "text-session", "turn_id": 2,
+         "question": "only theft"},
+        db, llm, translate.NullTranslator(), TODAY, store,
+    )
+    assert first["turn_id"] == 1
+    assert second["turn_id"] == 2
+    assert "Previous verified question" in llm.prompts[-2]
+    assert [turn.turn_id for turn in store.load("text-session", 9).turns] == [1, 2]

@@ -126,8 +126,15 @@ def handle_question(payload, db, llm, translator, today):
 def handle_voice_question(payload, db, llm, translator, today, conversation_store):
     """Run a voice turn through the exact text query path and persist context."""
     request = validate_voice_request(payload)
+    state = conversation_store.load(request.session_id, request.employee_id)
+    contextual_transcript = request.transcript
+    if state.turns:
+        contextual_transcript = (
+            "Previous verified question: {0}\nCurrent follow-up: {1}"
+            .format(state.turns[-1].transcript, request.transcript)
+        )
     result = handle_question(
-        dict(payload, employee_id=request.employee_id, question=request.transcript,
+        dict(payload, employee_id=request.employee_id, question=contextual_transcript,
              input_mode=request.input_mode, turn_id=request.turn_id,
              session_id=request.session_id),
         db, llm, translator, today,
@@ -143,6 +150,28 @@ def handle_voice_question(payload, db, llm, translator, today, conversation_stor
         prior_task={"task_type": _task_type(payload)},
     )
     return voice_response(request, result, speak=not result.get("refused", False))
+
+
+def handle_session_question(payload, db, llm, translator, today, conversation_store):
+    """Persist typed turns through the same verified query path as voice."""
+    employee_id = int(payload["employee_id"])
+    session_id = str(payload["session_id"])
+    turn_id = int(payload["turn_id"])
+    state = conversation_store.load(session_id, employee_id)
+    question = payload.get("question", "")
+    if state.turns:
+        question = "Previous verified question: {0}\nCurrent follow-up: {1}".format(
+            state.turns[-1].transcript, question,
+        )
+    result = handle_question(dict(payload, question=question), db, llm, translator, today)
+    conversation_store.append(
+        session_id, employee_id,
+        ConversationTurn(turn_id, "text", payload.get("question", ""),
+                         result.get("language", "en"),
+                         tuple(result.get("citations", ()))),
+        prior_task={"task_type": _task_type(payload)},
+    )
+    return dict(result, turn_id=turn_id)
 
 
 def _quickml_token(app):
@@ -181,11 +210,16 @@ def handler(request):
     translator = translate.QuickMLTranslator(llm)
 
     payload = request.get_json(silent=True) or {}
-    if payload.get("input_mode") == "voice" and payload.get("session_id") is not None:
+    if payload.get("session_id") is not None and payload.get("turn_id") is not None:
         conversation_store = CatalystCacheConversationStore(app.cache())
-        result = handle_voice_question(
-            payload, db, llm, translator, dt.date.today(), conversation_store,
-        )
+        if payload.get("input_mode") == "voice":
+            result = handle_voice_question(
+                payload, db, llm, translator, dt.date.today(), conversation_store,
+            )
+        else:
+            result = handle_session_question(
+                payload, db, llm, translator, dt.date.today(), conversation_store,
+            )
         return make_response(jsonify(result), 403 if result["refused"] else 200)
     result = handle_question(payload, db, llm, translator, dt.date.today())
 
