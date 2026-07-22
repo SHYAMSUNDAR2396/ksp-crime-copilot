@@ -2,15 +2,13 @@
 
 **Status:** Approved design
 **Date:** 2026-07-22
-**Scope:** Kannada-English voice interaction for the KSP Crime Copilot
+**Purpose:** Kannada-English voice interaction for the KSP Crime Copilot
 
-## 1. Goals and Non-Goals
+## 1. Purpose and Coverage
 
 The voice experience must let an officer ask a Kannada, English, or mixed-language question, interrupt an answer naturally, and receive a cited response in the requested language. It must preserve the existing Catalyst query, evidence, citation, and rank-derived authorization behavior.
 
 The prototype is desktop-browser first, with a mobile-compatible layout and graceful text fallback. Browser speech APIs are acceptable for the prototype. Production must support replacing them with a dedicated multilingual streaming provider without changing Catalyst's reasoning contract.
-
-This design does not implement overlapping-speaker separation, raw-audio retention, or a complete telephony/WhatsApp voice channel. Those require separate provider and operational decisions.
 
 ## 2. System Boundary
 
@@ -140,7 +138,7 @@ SpeechSynthesizer
 - Cancel speech synthesis immediately on VAD speech start.
 - Speak sentence-sized chunks where possible, with each chunk tagged by `turn_id`.
 - Support Kannada-English code-switching within one utterance.
-- Keep overlapping speakers out of scope.
+- Leave room for optional diarization if multi-speaker support is introduced later.
 
 ### Production replacement
 

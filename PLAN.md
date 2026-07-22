@@ -307,7 +307,7 @@ alert scoring, summaries, exports, or audit logs.
 ### 1.6 Kannada bridge, voice & conversation features
 
 - **Translate–reason–translate**: the Translation Agent detects language, pivots to English for specialist reasoning, and renders verified output back in Kannada; names and CrimeNos are preserved verbatim.
-- **Voice interaction**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; after that it enters the Supervisor Agent as a normal request. Spike Kannada coverage in-browser early; fall back to a Zia/STT service, then to typed-only (cut line).
+- **Voice interaction**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; after that it enters the Supervisor Agent as a normal request. Spike Kannada coverage in-browser early, with a Zia/STT service and typed-input fallback available during rollout.
 - **Context-aware conversations**: Catalyst Cache keyed by session holds active filters and the prior verified task context. The Supervisor reads it before building the next task graph, so "now just the two-wheelers" narrows the previous result.
 - **PDF export of conversation history**: transcript + citations already exist in Cache/audit; a SmartBrowz Function renders them to PDF on request. No new data path.
 
@@ -434,56 +434,13 @@ flowchart LR
 
 ---
 
-## 2. Scope & cut lines
-
-**Committed (must demo):**
-
-*Multi-agent execution foundation*
-0. Supervisor Agent with typed `TaskContext`/`EvidenceBundle`, capability-based parallel fan-out, verification/citation gate, bounded retries, and backward-compatible response shaping
-
-*Core conversational platform*
-1. NL question → cited answer (NL→SQL + validation + CrimeNo citations), English + Kannada, through the Supervisor Agent
-2. Voice-enabled interaction (Web Speech API entering the supervised task graph)
-3. Context-aware multi-turn conversations (Catalyst Cache session state)
-4. PDF export of conversation history (SmartBrowz)
-5. Explainable answers + immutable audit trail
-6. RBAC by rank (Catalyst Auth + `Rank`/`Unit` scoping, DPDP field masking)
-
-*Analytics & intelligence (§1.7)*
-7. Crime pattern discovery (SQL aggregates + MO similarity + DBSCAN clusters)
-8. Criminal network analysis + visualization (traversal, community detection, centrality; GraphRAG fusion for link questions)
-9. Hidden-link discovery (entity-resolution graph)
-10. Crime trend & hotspot detection (roll-ups + DBSCAN map)
-11. Predictive analytics & early warnings (station × crime-type forecasts, threshold alerts — geographic only)
-12. Socio-demographic insights (demographic aggregates, guardrailed)
-13. Behavioral profiling (cited per-person narrative from linked cases)
-14. Proactive prevention briefing (trend + network synthesis for command roles)
-15. Cross-lingual Kannada-English MO matching for similar-case search and alert evidence
-16. Cross-jurisdiction silent-match alerts with batch replay and post-ingestion live scan
-
-**Cut lines (pre-agreed degradations, invoke without debate if a feature is at risk of not being demo-ready):**
-| Feature at risk | Degrade to |
-|---|---|
-| Voice input | Typed Kannada only |
-| Fuzzy entity resolution | Exact normalised-name match (synthetic data guarantees matches) |
-| Multi-agent fusion into one answer | Return the strongest verified specialist result with explicit limitations |
-| Community detection / centrality | k-hop traversal + path-finding only |
-| Predictive forecasts | Descriptive trend charts (actuals vs. baseline, no forecast) |
-| Prevention briefing | Two separate views (hotspot map + repeat-offender list) instead of one synthesis |
-| Behavioral profile | Raw linked-case list without the composed narrative |
-| Cross-lingual MO index | Structured candidate matching plus same-language lexical evidence; no semantic alert contribution |
-| Live silent-match trigger | Nightly/replayable batch scan using the same scanner contract |
-| PDF export | Print-to-PDF from the browser |
-
----
-
-## 3. Risk register
+## 2. Risk register
 
 | Risk | Likelihood | Trigger | Mitigation / fallback |
 |---|---|---|---|
 | ZCQL can't express needed joins/aggregates | Med | Early Catalyst capability check | Precomputed denormalised views at ingestion; Functions-side join composition |
 | NL→SQL hallucinates columns/values | High | Eval failures | Allowlist validation + re-prompt; lookup values in prompt; SELECT-only |
-| Entity-resolution false positives | Med | Wrong links in rehearsal | Curated seeds guarantee true positives; confidence shown on every link; cut line → exact match |
+| Entity-resolution false positives | Med | Wrong links in rehearsal | Curated seeds guarantee true positives; confidence shown on every link; use exact normalised-name matching for affected cases |
 | Qwen Kannada generation weak | High (known) | Kannada answers garbled | English-pivot bridge is the design; names/IDs passed through verbatim |
 | QuickML RAG has no chat history | Certain (known) | — | Multi-turn context is app-layer by design: session state in Catalyst Cache (§1.6) |
 | QuickML quotas/latency too tight for live demo | Med | Early Catalyst capability check | Cache pre-staged demo queries; trim dataset; recorded backup |
@@ -493,14 +450,14 @@ flowchart LR
 | Live and batch silent-match paths diverge | Med | Same fixture produces different alert score | One SilentMatchScanner contract; parity test runs both `date_window` and `anchor_case_id` modes |
 | Demo-day connectivity failure | Low | — | Recorded backup demo (mandatory) |
 | Synthetic data looks fake to jury | Med | Q&A | Schema is the *official* one; say so — "runs unchanged on real CCTNS rows" |
-| Web Speech API lacks Kannada STT in target browser | Med | Voice spike | Zia/STT service fallback; cut line → typed Kannada |
+| Web Speech API lacks Kannada STT in target browser | Med | Voice spike | Use the Zia/STT service fallback or typed Kannada input |
 | Forecasts meaningless on synthetic data | High | Eval | Seed the generator with deliberate trends/seasonality so forecasts have signal; present as capability demo, not validated prediction |
-| 16 committed features overload the team | High | Any checkpoint slip | Cut lines above are per-feature and pre-agreed; supervisor foundation and core platform (items 0–6) outrank analytics and proactive intelligence (7–16) |
+| Feature count overloads the team | High | Any checkpoint slip | Prioritize the supervisor foundation, core conversational platform, RBAC, and evidence/citation path before analytics and proactive intelligence |
 | Profiling/demographics read as discriminatory | Med | Jury Q&A | Guardrails are in the design (§1.7): no person risk scores, caste/religion never model features, aggregates only — say so proactively |
 
 ---
 
-## 4. Demo runbook (8 beats) & metrics
+## 3. Demo runbook (9 beats) & metrics
 
 **Beats — every query pre-staged against known synthetic records:**
 1. **Kannada voice question, cited answer** — constable login asks *by voice* in Kannada: "ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?" → spoken + written Kannada answer with CrimeNo citations.
@@ -526,10 +483,10 @@ flowchart LR
 
 ---
 
-## 5. Definition of done
+## 4. Definition of done
 
 - Supervisor dispatch, typed evidence envelopes, verification, and backward-compatible responses pass contract and failure-path tests.
-- All 16 committed features pass in a full run-through **on Catalyst, not localhost** (cut-line degradations count as passing if invoked per §2).
+- All planned features pass in a full run-through **on Catalyst, not localhost**, with documented fallback behavior where an external dependency is unavailable.
 - Batch and post-ingestion live silent-match scans produce identical evidence for identical fixtures and do not duplicate alerts.
 - Cross-lingual MO matches return original Kannada/English excerpts, both `CrimeNo`s, and model/index version.
 - Recorded backup demo exists.
