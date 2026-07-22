@@ -57,7 +57,7 @@ class CatalystCacheConversationStore(InMemoryConversationStore):
 
     def __init__(self, cache, max_turns=20, prefix="ksp:conversation:"):
         super().__init__(max_turns=max_turns)
-        self.cache = cache
+        self.cache = cache.segment() if hasattr(cache, "segment") else cache
         self.prefix = prefix
 
     def _key(self, session_id, employee_id):
@@ -65,7 +65,11 @@ class CatalystCacheConversationStore(InMemoryConversationStore):
 
     def load(self, session_id, employee_id):
         key = self._key(session_id, employee_id)
-        raw = self.cache.get(key)
+        raw = (
+            self.cache.get_value(key)
+            if hasattr(self.cache, "get_value")
+            else self.cache.get(key)
+        )
         if not raw:
             return ConversationState(session_id, int(employee_id))
         import json

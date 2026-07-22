@@ -57,3 +57,23 @@ def test_cache_store_round_trips_owned_turns():
     store.append("s1", 9, ConversationTurn(1, "voice", "hello", "en", ("FIR/1",)))
     assert store.load("s1", 9).turns[0].citations == ("FIR/1",)
     assert store.load("s1", 10).turns == ()
+
+
+def test_cache_store_supports_catalyst_segment_shape():
+    class Segment:
+        def __init__(self):
+            self.values = {}
+        def put(self, key, value):
+            self.values[key] = value
+        def get_value(self, key):
+            return self.values.get(key)
+
+    class Cache:
+        def __init__(self):
+            self.segment_value = Segment()
+        def segment(self):
+            return self.segment_value
+
+    store = CatalystCacheConversationStore(Cache())
+    store.append("s2", 9, ConversationTurn(2, "voice", "hello", "en"))
+    assert store.load("s2", 9).turns[0].turn_id == 2
