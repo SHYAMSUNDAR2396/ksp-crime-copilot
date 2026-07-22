@@ -122,9 +122,9 @@ class _OperationalTable(object):
         self.inserted.append(fields)
         return {"ROWID": "alert-row-1"}
 
-    def update_row(self, row_id, fields):
-        self.updated.append((row_id, fields))
-        return {"ROWID": row_id}
+    def update_row(self, row):
+        self.updated.append(row)
+        return {"ROWID": row["ROWID"]}
 
 
 class _OperationalDatastore(object):
@@ -176,4 +176,5 @@ def test_zcql_operational_writes_use_datastore_rows():
     zdb = db_module.ZcqlDB(App())
     assert zdb.insert_operational("SilentMatchAlert", {"Score": 80}) == "alert-row-1"
     zdb.update_operational("SilentMatchAlert", "alert-row-1", {"Score": 90})
-    assert datastore.tables["SilentMatchAlert"].updated[0][1]["Score"] == 90
+    assert datastore.tables["SilentMatchAlert"].updated[0]["Score"] == 90
+    assert datastore.tables["SilentMatchAlert"].updated[0]["ROWID"] == "alert-row-1"

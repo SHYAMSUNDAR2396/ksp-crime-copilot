@@ -248,7 +248,15 @@ class ZcqlDB(object):
         if table not in catalog.OPERATIONAL_TABLES:
             raise DBError("operational table is not allowed")
         try:
-            return self._datastore.table(table).update_row(row_id, dict(row))
+            payload = dict(row)
+            payload["ROWID"] = str(row_id)
+            table_obj = self._datastore.table(table)
+            try:
+                return table_obj.update_row(payload)
+            except TypeError:
+                # Compatibility with an older local fake; Catalyst SDK 1.3.0
+                # uses the single ROWID-bearing row form above.
+                return table_obj.update_row(row_id, dict(row))
         except Exception as err:
             raise DBError("operational update failed: {0}".format(err))
 
