@@ -4,6 +4,7 @@ from functions.crime_query.access import AccessContext
 from functions.crime_query.silent_match_api import SilentMatchAPI
 from functions.crime_query.mo_models import SemanticMatch
 from functions.crime_query.silent_match_models import ScanResult
+from functions.silent_match.main import handle_request
 
 
 def context():
@@ -70,3 +71,16 @@ def test_scan_uses_live_capability():
     })
     assert status == 200
     assert response["run_id"] == "run-1"
+
+
+def test_catalyst_request_adapter_delegates_method_path_and_json():
+    class Request:
+        method = "POST"
+        path = "/scan"
+
+        def get_json(self, silent=True):
+            return {"employee_id": 9, "anchor_case_id": 1, "trigger_source": "live"}
+
+    body, status = handle_request(Request(), api())
+    assert status == 200
+    assert body["run_id"] == "run-1"

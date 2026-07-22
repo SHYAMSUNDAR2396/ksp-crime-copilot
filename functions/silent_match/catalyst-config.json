@@ -1,0 +1,16 @@
+{
+  "deployment": {
+    "name": "silent_match",
+    "stack": "python_3_9",
+    "type": "advancedio",
+    "env_variables": {
+      "QUICKML_EMBEDDINGS_ENDPOINT": "",
+      "QUICKML_EMBEDDINGS_MODEL": "multilingual-v1",
+      "QUICKML_EMBEDDINGS_TIMEOUT": "10",
+      "QUICKML_EMBEDDINGS_BATCH_SIZE": "32"
+    }
+  },
+  "execution": {
+    "main": "main.py"
+  }
+}
