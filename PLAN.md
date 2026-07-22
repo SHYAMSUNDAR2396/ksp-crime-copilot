@@ -5,7 +5,7 @@ Platform: Zoho Catalyst (mandated) · Data: schema provided ([Police_FIR_ER_Diag
 
 Companion strategy document: [Technical Report](KSP-Datathon2026-Conversational-AI-Technical-Report.html). This plan supersedes the report's §04–§08 architecture wherever the real schema contradicts it.
 
-Current production implementation plans: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md) and [Rank-Derived Capability RBAC](docs/superpowers/plans/2026-07-21-rank-derived-capability-rbac.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md), [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md), and [rank-derived capability RBAC](docs/superpowers/specs/2026-07-21-rank-derived-capability-rbac-design.md).
+Current production implementation plans: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md) and [Rank-Derived Capability RBAC](docs/superpowers/plans/2026-07-21-rank-derived-capability-rbac.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md), [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md), [rank-derived capability RBAC](docs/superpowers/specs/2026-07-21-rank-derived-capability-rbac-design.md), and [provider-neutral voice interaction architecture](docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md).
 
 ---
 
@@ -310,7 +310,9 @@ alert scoring, summaries, exports, or audit logs.
 
 - **Translate–reason–translate**: the Translation Agent detects language, pivots to English for specialist reasoning, and renders verified output back in Kannada; names and CrimeNos are preserved verbatim.
 - **Chatbot query interface**: the Web Client Hosting experience provides a persistent text composer for English, Kannada, and mixed-language questions. Typed messages enter the same API contract, Supervisor task graph, RBAC filters, evidence verification, citations, session context, and audit trail as voice queries.
-- **Voice querying**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; the final transcript enters the same query path as a chatbot message. Spike Kannada coverage in-browser early, with a Zia/STT service and typed-input fallback available during rollout.
+- **Voice querying**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; the final transcript enters the same query path as a chatbot message. The full contract is defined in the [voice interaction architecture design](docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md).
+- **Voice turn safety**: the client owns VAD, immediate TTS cancellation, prior-request aborts, and monotonic `turn_id` handling. Only final transcripts enter Catalyst; stale responses are discarded and never rendered or spoken.
+- **Provider-neutral migration**: browser ASR/TTS is the prototype adapter. A dedicated multilingual streaming provider may replace it later without changing Catalyst's auth, evidence, citation, translation, or audit contract.
 - **Context-aware conversations**: Catalyst Cache keyed by session holds active filters and the prior verified task context. The Supervisor reads it before building the next task graph, so "now just the two-wheelers" narrows the previous result.
 - **PDF export of conversation history**: transcript + citations already exist in Cache/audit; a SmartBrowz Function renders them to PDF on request. No new data path.
 
