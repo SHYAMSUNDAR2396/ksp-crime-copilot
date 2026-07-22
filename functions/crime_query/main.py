@@ -10,17 +10,21 @@ import uuid
 try:
     # Local/test context: main.py imported as functions.crime_query.main.
     from . import access, agent, catalog, policy_audit, supervisor, translate
+    from .conversation import ConversationTurn
     from .db import ZcqlDB
     from .llm import QuickMLLLM
     from .rbac import MASK
+    from .voice import validate_voice_request, voice_response
 except ImportError:
     # Catalyst runtime context: main.py loaded standalone via
     # importlib.util.spec_from_file_location with no parent package,
     # dependencies vendored flat alongside it.
     import access, agent, catalog, policy_audit, supervisor, translate
+    from conversation import ConversationTurn
     from db import ZcqlDB
     from llm import QuickMLLLM
     from rbac import MASK
+    from voice import validate_voice_request, voice_response
 
 
 def _identifying_values(rows):
@@ -117,6 +121,28 @@ def handle_question(payload, db, llm, translator, today):
         "language": language,
         "policy_code": result.policy_code,
     }
+
+
+def handle_voice_question(payload, db, llm, translator, today, conversation_store):
+    """Run a voice turn through the exact text query path and persist context."""
+    request = validate_voice_request(payload)
+    result = handle_question(
+        dict(payload, employee_id=request.employee_id, question=request.transcript,
+             input_mode=request.input_mode, turn_id=request.turn_id,
+             session_id=request.session_id),
+        db, llm, translator, today,
+    )
+    conversation_store.append(
+        request.session_id,
+        request.employee_id,
+        ConversationTurn(
+            request.turn_id, request.input_mode, request.transcript,
+            result.get("language", request.response_language),
+            tuple(result.get("citations", ())),
+        ),
+        prior_task={"task_type": _task_type(payload)},
+    )
+    return voice_response(request, result, speak=not result.get("refused", False))
 
 
 def _quickml_token(app):

@@ -5,6 +5,7 @@ import pytest
 from functions.crime_query.access import AccessContext
 from functions.crime_query import db as db_module
 from functions.crime_query import main, translate
+from functions.crime_query.conversation import InMemoryConversationStore
 from functions.crime_query.llm import FakeLLM
 from tools import gen_data
 
@@ -180,3 +181,22 @@ def test_graph_task_type_denial_persists_safe_policy_audits(db):
         assert "Ravi Kumar" not in row["GeneratedSQL"]
         assert "Ravi Kumar" not in row["ExecutedSQL"]
     assert rows[0]["RowCount"] == 0
+
+
+def test_voice_question_uses_text_path_and_persists_citations(db):
+    llm = FakeLLM([SQL, "Two cases found."])
+    store = InMemoryConversationStore()
+    result = main.handle_voice_question(
+        {
+            "employee_id": 9,
+            "session_id": "voice-session",
+            "turn_id": 1,
+            "transcript": "recent cases",
+            "response_language": "en",
+        },
+        db, llm, translate.NullTranslator(), TODAY, store,
+    )
+    assert result["turn_id"] == 1
+    assert result["voice"]["text"]
+    assert result["citations"]
+    assert store.load("voice-session", 9).turns[0].citations == tuple(result["citations"])
