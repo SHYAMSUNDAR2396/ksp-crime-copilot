@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KSP Crime Copilot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Karnataka State Police</p>
+        <h1>Crime Copilot</h1>
+      </div>
+      <span id="role-badge" class="badge">Authenticated officer</span>
+    </header>
+    <section id="conversation" class="conversation" aria-live="polite">
+      <div class="empty-state">Ask a cited question about authorised case data.</div>
+    </section>
+    <form id="composer" class="composer">
+      <textarea id="question" rows="2" placeholder="Ask in English, ಕನ್ನಡ, or mixed language…" required></textarea>
+      <div class="composer-actions">
+        <button id="mic" type="button" class="secondary" aria-label="Start voice input">🎙 Speak</button>
+        <button type="submit" class="primary">Send</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </form>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

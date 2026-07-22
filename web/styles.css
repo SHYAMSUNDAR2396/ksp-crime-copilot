@@ -1,0 +1,22 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #182230; background: #edf2f7; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+.shell { width: min(920px, 100%); min-height: 100vh; margin: auto; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.eyebrow { margin: 0; color: #53657a; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+h1 { margin: 4px 0 0; font-size: 1.7rem; }
+.badge { border: 1px solid #b7c6d8; border-radius: 999px; padding: 7px 12px; color: #31465f; font-size: .82rem; background: white; }
+.conversation { flex: 1; min-height: 55vh; padding: 22px; border: 1px solid #d3dde8; border-radius: 16px; background: white; overflow: auto; }
+.empty-state { color: #718096; text-align: center; padding: 20vh 12px; }
+.message { max-width: 82%; margin: 0 0 18px; padding: 12px 15px; border-radius: 14px; white-space: pre-wrap; }
+.message.user { margin-left: auto; color: white; background: #174a7e; }
+.message.assistant { color: #233044; background: #f1f5f9; }
+.citations { margin-top: 9px; color: #476581; font-size: .82rem; }
+.composer { padding: 14px; border: 1px solid #d3dde8; border-radius: 16px; background: white; }
+textarea { width: 100%; resize: vertical; border: 0; outline: 0; font: inherit; color: inherit; }
+.composer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+button { border: 0; border-radius: 9px; padding: 9px 14px; font: inherit; cursor: pointer; }
+button.primary { color: white; background: #174a7e; }
+button.secondary { color: #174a7e; background: #e5edf5; }
+button.listening { color: white; background: #b42318; }
+.status { min-height: 1.2em; margin: 8px 0 0; color: #66788d; font-size: .82rem; }
