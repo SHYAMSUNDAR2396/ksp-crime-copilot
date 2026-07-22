@@ -28,11 +28,14 @@ class CatalystCaseLoader:
     CASE_SQL = (
         "SELECT CaseMaster.CaseMasterID, CaseMaster.CrimeNo, "
         "CaseMaster.CrimeRegisteredDate, CaseMaster.PoliceStationID, "
+        "CaseMaster.PolicePersonID, CaseMaster.CrimeMinorHeadID, "
         "CaseMaster.BriefFacts, CaseMaster.latitude, CaseMaster.longitude, "
-        "Unit.DistrictID, Accused.AccusedName, Accused.AgeYear, Accused.GenderID "
+        "Unit.DistrictID, Accused.AccusedName, Accused.AgeYear, Accused.GenderID, "
+        "ActSectionAssociation.SectionID "
         "FROM CaseMaster "
         "JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID "
-        "LEFT JOIN Accused ON Accused.CaseMasterID = CaseMaster.ROWID"
+        "LEFT JOIN Accused ON Accused.CaseMasterID = CaseMaster.ROWID "
+        "LEFT JOIN ActSectionAssociation ON ActSectionAssociation.CaseMasterID = CaseMaster.ROWID"
     )
 
     def __init__(self, db):
@@ -50,10 +53,14 @@ class CatalystCaseLoader:
                 key: row.get(key) for key in (
                     "CaseMasterID", "CrimeNo", "CrimeRegisteredDate",
                     "PoliceStationID", "DistrictID", "BriefFacts",
-                    "latitude", "longitude",
+                    "latitude", "longitude", "PolicePersonID",
+                    "CrimeMinorHeadID",
                 )
             })
-            for key in ("PoliceStationID", "DistrictID", "AgeYear", "GenderID"):
+            case.setdefault("_sections", set())
+            if row.get("SectionID") is not None:
+                case["_sections"].add(str(row["SectionID"]))
+            for key in ("PoliceStationID", "DistrictID", "AgeYear", "GenderID", "PolicePersonID"):
                 if case.get(key) is not None:
                     try:
                         case[key] = int(case[key])
@@ -70,6 +77,8 @@ class CatalystCaseLoader:
                 case["AccusedName"] = row["AccusedName"]
                 case["AgeYear"] = row.get("AgeYear")
                 case["GenderID"] = row.get("GenderID")
+        for case in cases.values():
+            case["SectionCodes"] = tuple(sorted(case.pop("_sections", set())))
         return list(cases.values())
 
     def __call__(self, case_id, candidates=False):
