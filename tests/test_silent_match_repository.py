@@ -56,3 +56,16 @@ def test_evidence_update_keeps_previous_snapshot_and_score(tmp_path):
     assert action["PreviousScore"] == first["Score"]
     assert action["PreviousConfidenceBand"] == first["ConfidenceBand"]
     assert action["EvidenceSnapshotJSON"]
+
+
+def test_run_and_recipient_records_are_idempotent(tmp_path):
+    path = tmp_path / "runs.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(catalog.sqlite_ddl())
+    conn.commit(); conn.close()
+    db = db_module.SqliteDB(str(path))
+    repo = SilentMatchRepository(db)
+    repo.create_run("run-1", "live", "start")
+    repo.ensure_recipient(3, 9)
+    repo.ensure_recipient(3, 9)
+    assert len(db.execute_raw('SELECT * FROM "SilentMatchRecipient"')) == 1

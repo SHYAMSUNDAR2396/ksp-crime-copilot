@@ -18,12 +18,14 @@ class SilentMatchScanner:
     ``upsert_alert`` and may optionally expose ``list_alerts``.
     """
 
-    def __init__(self, loader, matcher, repository, caller=None, clock=None):
+    def __init__(self, loader, matcher, repository, caller=None, clock=None,
+                 recipient_router=None):
         self.loader = loader
         self.matcher = matcher
         self.repository = repository
         self.caller = caller
         self.clock = clock or (lambda: dt.datetime.now(dt.timezone.utc).isoformat())
+        self.recipient_router = recipient_router or (lambda anchor, candidate: ())
 
     def scan(self, date_window=None, anchor_case_id=None, trigger_source="batch"):
         if (date_window is None) == (anchor_case_id is None):
@@ -31,6 +33,9 @@ class SilentMatchScanner:
         if trigger_source not in ("batch", "live"):
             raise ValueError("unsupported trigger source")
         run_id = uuid.uuid4().hex
+        started_at = self.clock()
+        if hasattr(self.repository, "create_run"):
+            self.repository.create_run(run_id, trigger_source, started_at)
         anchors, candidates = self.loader.load(
             anchor_case_id=anchor_case_id, date_window=date_window,
         )
@@ -66,16 +71,22 @@ class SilentMatchScanner:
                     result, anchor, candidate, run_id, self.clock(),
                 )
                 alerts.append(alert)
+                if alert and hasattr(self.repository, "ensure_recipient"):
+                    for employee_id in self.recipient_router(anchor, candidate) or ():
+                        self.repository.ensure_recipient(alert["AlertID"], employee_id)
                 if before:
                     updated += 1
                 else:
                     created += 1
-        return ScanResult(
+        result = ScanResult(
             run_id=run_id, trigger_source=trigger_source,
             anchors_seen=len(anchors), candidates_seen=len(candidates),
             alerts=tuple(alerts), alerts_created=created, alerts_updated=updated,
             skipped_cases=tuple(skipped), failures=tuple(failures),
         )
+        if hasattr(self.repository, "finish_run"):
+            self.repository.finish_run(run_id, result, self.clock())
+        return result
 
     def _existing(self, alert_type, pair):
         for row in getattr(self.repository, "list_alerts", lambda: ())():

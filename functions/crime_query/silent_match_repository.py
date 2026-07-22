@@ -90,6 +90,44 @@ class SilentMatchRepository:
                 )
         return self.get_alert(alert_id)
 
+    def ensure_recipient(self, alert_id, employee_id):
+        rows = self._read("SilentMatchRecipient",
+                          {"AlertID": alert_id, "EmployeeID": employee_id})
+        if rows:
+            return rows[0]
+        recipient_id = self._insert(
+            "SilentMatchRecipient",
+            {"AlertID": alert_id, "EmployeeID": employee_id},
+            'INSERT INTO "SilentMatchRecipient" (AlertID, EmployeeID) VALUES (?, ?)',
+            (alert_id, employee_id),
+        )
+        rows = self._read("SilentMatchRecipient", {"RecipientID": recipient_id})
+        return rows[0] if rows else {"RecipientID": recipient_id, "AlertID": alert_id,
+                                     "EmployeeID": employee_id}
+
+    def create_run(self, run_id, trigger_source, started_at):
+        self._insert(
+            "SilentMatchRun",
+            {"RunID": run_id, "TriggerSource": trigger_source, "Status": "running",
+             "StartedAt": started_at},
+            'INSERT INTO "SilentMatchRun" (RunID, TriggerSource, Status, StartedAt) VALUES (?, ?, ?, ?)',
+            (run_id, trigger_source, "running", started_at),
+        )
+
+    def finish_run(self, run_id, result, finished_at):
+        self._update(
+            "SilentMatchRun", run_id,
+            {"Status": "failed" if result.failures else "completed",
+             "AnchorsSeen": result.anchors_seen,
+             "CandidatesSeen": result.candidates_seen,
+             "AlertsCreated": result.alerts_created,
+             "FinishedAt": finished_at},
+            'UPDATE "SilentMatchRun" SET Status = ?, AnchorsSeen = ?, CandidatesSeen = ?, '
+            'AlertsCreated = ?, FinishedAt = ? WHERE RunID = ?',
+            ("failed" if result.failures else "completed", result.anchors_seen,
+             result.candidates_seen, result.alerts_created, finished_at, run_id),
+        )
+
     def list_alerts(self, status=None):
         if status is None:
             return self._read("SilentMatchAlert", {})
