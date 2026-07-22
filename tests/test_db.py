@@ -113,6 +113,28 @@ class _FailingDatastore(object):
         return _FailingTable()
 
 
+class _OperationalTable(object):
+    def __init__(self):
+        self.inserted = []
+        self.updated = []
+
+    def insert_row(self, fields):
+        self.inserted.append(fields)
+        return {"ROWID": "alert-row-1"}
+
+    def update_row(self, row_id, fields):
+        self.updated.append((row_id, fields))
+        return {"ROWID": row_id}
+
+
+class _OperationalDatastore(object):
+    def __init__(self):
+        self.tables = {}
+
+    def table(self, name):
+        return self.tables.setdefault(name, _OperationalTable())
+
+
 class _StubZcql(object):
     def execute_query(self, sql):
         return []
@@ -142,3 +164,16 @@ def test_zcql_append_audit_raises_dberror_on_failure():
             RowCount=0,
             LoggedAt="2026-07-09T10:00:00",
         )
+
+
+def test_zcql_operational_writes_use_datastore_rows():
+    datastore = _OperationalDatastore()
+
+    class App(_StubApp):
+        def datastore(self):
+            return datastore
+
+    zdb = db_module.ZcqlDB(App())
+    assert zdb.insert_operational("SilentMatchAlert", {"Score": 80}) == "alert-row-1"
+    zdb.update_operational("SilentMatchAlert", "alert-row-1", {"Score": 90})
+    assert datastore.tables["SilentMatchAlert"].updated[0][1]["Score"] == 90

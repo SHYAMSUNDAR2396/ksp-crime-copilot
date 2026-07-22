@@ -103,6 +103,43 @@ class SqliteDB(object):
         except sqlite3.Error as err:
             raise DBError(str(err))
 
+    def insert_operational(self, table, row):
+        if table not in catalog.OPERATIONAL_TABLES:
+            raise DBError("operational table is not allowed")
+        columns = list(row)
+        quoted = ",".join('"{}"'.format(column) for column in columns)
+        placeholders = ",".join("?" for _ in columns)
+        return self.execute_write(
+            'INSERT INTO "{}" ({}) VALUES ({})'.format(table, quoted, placeholders),
+            tuple(row[column] for column in columns),
+        )
+
+    def update_operational(self, table, row_id, row):
+        if table not in catalog.OPERATIONAL_TABLES:
+            raise DBError("operational table is not allowed")
+        assignments = ",".join('"{}" = ?'.format(column) for column in row)
+        values = tuple(row[column] for column in row) + (row_id,)
+        key = {"SilentMatchAlert": "AlertID", "SilentMatchAction": "ActionID",
+               "SilentMatchRecipient": "RecipientID", "SilentMatchRun": "RunID",
+               "MoEmbeddingRecord": "CaseMasterID"}[table]
+        return self.execute_write(
+            'UPDATE "{}" SET {} WHERE "{}" = ?'.format(table, assignments, key),
+            values,
+        )
+
+    def read_operational(self, table, filters=None):
+        if table not in catalog.OPERATIONAL_TABLES:
+            raise DBError("operational table is not allowed")
+        filters = filters or {}
+        where = ""
+        params = ()
+        if filters:
+            where = " WHERE " + " AND ".join(
+                '"{}" = ?'.format(column) for column in filters
+            )
+            params = tuple(filters[column] for column in filters)
+        return self.execute_raw('SELECT * FROM "{}"{}'.format(table, where), params)
+
     def close(self):
         self._conn.close()
 
@@ -189,6 +226,45 @@ class ZcqlDB(object):
             self._datastore.table(catalog.AUDIT_TABLE).insert_row(fields)
         except Exception as err:
             raise DBError("audit write failed: {0}".format(err))
+
+    @staticmethod
+    def _operational_key(table):
+        return {"SilentMatchAlert": "AlertID", "SilentMatchAction": "ActionID",
+                "SilentMatchRecipient": "RecipientID", "SilentMatchRun": "RunID",
+                "MoEmbeddingRecord": "CaseMasterID"}[table]
+
+    def insert_operational(self, table, row):
+        if table not in catalog.OPERATIONAL_TABLES:
+            raise DBError("operational table is not allowed")
+        try:
+            result = self._datastore.table(table).insert_row(dict(row))
+            if isinstance(result, dict):
+                return result.get("ROWID") or result.get(self._operational_key(table))
+            return result
+        except Exception as err:
+            raise DBError("operational insert failed: {0}".format(err))
+
+    def update_operational(self, table, row_id, row):
+        if table not in catalog.OPERATIONAL_TABLES:
+            raise DBError("operational table is not allowed")
+        try:
+            return self._datastore.table(table).update_row(row_id, dict(row))
+        except Exception as err:
+            raise DBError("operational update failed: {0}".format(err))
+
+    def read_operational(self, table, filters=None):
+        if table not in catalog.OPERATIONAL_TABLES:
+            raise DBError("operational table is not allowed")
+        filters = filters or {}
+        predicates = []
+        for column, value in filters.items():
+            if isinstance(value, (int, float)):
+                predicates.append("{} = {}".format(column, value))
+            else:
+                escaped = str(value).replace("'", "''")
+                predicates.append("{} = '{}'".format(column, escaped))
+        where = " WHERE " + " AND ".join(predicates) if predicates else ""
+        return self.execute_raw("SELECT * FROM {}{}".format(table, where))
 
     def close(self):
         pass
