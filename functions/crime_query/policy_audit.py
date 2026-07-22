@@ -54,6 +54,44 @@ class PolicyAuditRecord:
         }
 
 
+@dataclass(frozen=True)
+class ScopeSafeResult:
+    code: str
+    rows: Tuple[dict, ...]
+    limitations: Tuple[str, ...] = ()
+
+
+def scope_safe_export(context, requested_session_id, owner_employee_id, rows):
+    """Authorize an export before serializing any transcript/case content."""
+    if not context.has("export_conversation"):
+        return ScopeSafeResult("CAPABILITY_DENIED", (), ())
+    if str(owner_employee_id) != str(context.employee_id):
+        return ScopeSafeResult("SCOPE_DENIED", (), ())
+    safe_rows = []
+    for row in rows or ():
+        safe = dict(row)
+        # Cached content is untrusted: do not export raw audio or policy-only
+        # metadata, and preserve only the already-cited answer contract.
+        safe.pop("raw_audio", None)
+        safe.pop("audio", None)
+        safe_rows.append(safe)
+    return ScopeSafeResult("OK", tuple(safe_rows))
+
+
+def filter_audit_rows(context, rows):
+    """Apply fixed audit visibility rules; callers cannot choose a scope."""
+    visible = []
+    for row in rows or ():
+        if context.audit_visibility == "statewide_summary":
+            visible.append(dict(row))
+        elif context.audit_visibility == "district":
+            if row.get("DistrictID") in tuple(context.district_ids or ()):
+                visible.append(dict(row))
+        elif row.get("EmployeeID") == context.employee_id:
+            visible.append(dict(row))
+    return tuple(visible)
+
+
 def _stable_bundle_ids(bundles):
     return tuple(bundle.bundle_id for bundle in bundles)
 
