@@ -45,6 +45,14 @@ class SqliteDB(object):
             raise DBError(str(err))
         return [dict(row) for row in cursor.fetchall()]
 
+    def execute_write(self, sql, params=()):
+        try:
+            cursor = self._conn.execute(sql, params)
+            self._conn.commit()
+            return cursor.lastrowid
+        except sqlite3.Error as err:
+            raise DBError(str(err))
+
     def units_in_district(self, district_id):
         rows = self.execute_raw(
             'SELECT UnitID FROM "Unit" WHERE DistrictID = ? ORDER BY UnitID',

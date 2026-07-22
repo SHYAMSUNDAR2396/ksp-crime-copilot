@@ -272,6 +272,11 @@ CASE_SCOPED_TABLES = frozenset({
 
 ALLOWED_FUNCTIONS = frozenset({"COUNT", "SUM", "AVG", "MIN", "MAX"})
 
+OPERATIONAL_TABLES = frozenset({
+    "SilentMatchAlert", "SilentMatchRecipient", "SilentMatchAction",
+    "SilentMatchRun", "MoEmbeddingRecord",
+})
+
 # Mandated by PLAN.md 1.5. Absent from TABLES on purpose: the LLM must never see it.
 AUDIT_TABLE = "AuditLog"
 AUDIT_COLUMNS = {
@@ -315,7 +320,66 @@ def sqlite_ddl():
     statements.append(
         'CREATE TABLE IF NOT EXISTS "{0}" (\n  {1}\n);'.format(AUDIT_TABLE, audit_cols)
     )
-    return "\n\n".join(statements)
+    return "\n\n".join(statements) + "\n\n" + operational_ddl()
+
+
+def operational_ddl():
+    """DDL for fixed operational tables, intentionally outside TABLES."""
+    return """
+CREATE TABLE IF NOT EXISTS "SilentMatchAlert" (
+  "AlertID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "AlertType" TEXT NOT NULL,
+  "AnchorCaseID" INTEGER NOT NULL,
+  "MatchedCaseID" INTEGER NOT NULL,
+  "AnchorCrimeNo" TEXT NOT NULL,
+  "MatchedCrimeNo" TEXT NOT NULL,
+  "Score" INTEGER NOT NULL,
+  "ConfidenceBand" TEXT NOT NULL,
+  "Status" TEXT NOT NULL DEFAULT 'New',
+  "EvidenceJSON" TEXT NOT NULL,
+  "EvidenceSnapshotJSON" TEXT NOT NULL,
+  "SourceRunID" TEXT NOT NULL,
+  "IndexVersion" TEXT NOT NULL DEFAULT '',
+  "CreatedAt" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("AlertType", "AnchorCaseID", "MatchedCaseID")
+);
+CREATE INDEX IF NOT EXISTS "idx_SilentMatchAlert_Status" ON "SilentMatchAlert" ("Status");
+CREATE TABLE IF NOT EXISTS "SilentMatchRecipient" (
+  "RecipientID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "AlertID" INTEGER NOT NULL,
+  "EmployeeID" INTEGER NOT NULL,
+  "SeenAt" TEXT,
+  UNIQUE ("AlertID", "EmployeeID")
+);
+CREATE TABLE IF NOT EXISTS "SilentMatchAction" (
+  "ActionID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "AlertID" INTEGER NOT NULL,
+  "Action" TEXT NOT NULL,
+  "Note" TEXT NOT NULL,
+  "EmployeeID" INTEGER NOT NULL,
+  "CreatedAt" TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "SilentMatchRun" (
+  "RunID" TEXT PRIMARY KEY,
+  "TriggerSource" TEXT NOT NULL,
+  "Status" TEXT NOT NULL,
+  "AnchorsSeen" INTEGER NOT NULL DEFAULT 0,
+  "CandidatesSeen" INTEGER NOT NULL DEFAULT 0,
+  "AlertsCreated" INTEGER NOT NULL DEFAULT 0,
+  "StartedAt" TEXT NOT NULL,
+  "FinishedAt" TEXT
+);
+CREATE TABLE IF NOT EXISTS "MoEmbeddingRecord" (
+  "CaseMasterID" INTEGER PRIMARY KEY,
+  "CrimeNo" TEXT NOT NULL,
+  "IndexVersion" TEXT NOT NULL,
+  "Provider" TEXT NOT NULL,
+  "VectorJSON" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "idx_SilentMatchAction_Alert" ON "SilentMatchAction" ("AlertID");
+""".strip()
 
 
 def describe():

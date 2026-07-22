@@ -112,3 +112,9 @@ def test_describe_foreign_keys_uses_catalyst_parent_rowids():
     assert "Catalyst Foreign Key joins (child column -> parent ROWID)" in described
     assert "CaseMaster.PoliceStationID -> Unit.ROWID" in described
     assert "CaseMaster.PoliceStationID -> Unit.UnitID" not in described
+
+
+def test_operational_tables_are_not_part_of_nl_catalog():
+    assert "SilentMatchAlert" not in catalog.TABLES
+    assert "SilentMatchAlert" in catalog.OPERATIONAL_TABLES
+    assert "CREATE TABLE IF NOT EXISTS \"SilentMatchAlert\"" in catalog.operational_ddl()
