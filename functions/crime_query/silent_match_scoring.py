@@ -67,7 +67,11 @@ def score_candidate(anchor, candidate, semantic_signal=None):
     distance = _distance_km(anchor, candidate)
     if distance is not None and distance <= 5:
         evidence.append(("geo_proximity", 10))
-    similarity = float((semantic_signal or {}).get("similarity", 0.0) or 0.0)
+    if isinstance(semantic_signal, dict):
+        raw_similarity = semantic_signal.get("similarity", 0.0)
+    else:
+        raw_similarity = getattr(semantic_signal, "similarity", 0.0)
+    similarity = float(raw_similarity or 0.0)
     if similarity > 0:
         evidence.append(("mo_similarity", min(10.0, max(0.0, similarity * 10.0))))
 
