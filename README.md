@@ -254,11 +254,15 @@ Responses include refusal status, answer text, generated SQL when safe, rows, ci
 
 ## Contributors
 
-Contributors are listed from the repository's Git history. The current history contains one contributor identity:
+Contributors are listed from the repository's Git history and the project team list:
 
 - **SHYAMSUNDAR2396**
+- **jeevanav123**
+- [**JheevikhaKannadasan**](https://github.com/JheevikhaKannadasan)
+- [**G Thiruvarasmurthy**](https://github.com/Thiruvarasamurthy)
+- **PK LATHISS KHUMAR**
 
-If additional team members contribute outside this Git history, add their names here when their commits are incorporated.
+GitHub links are included where they were provided by the project team.
 
 ## License
 
