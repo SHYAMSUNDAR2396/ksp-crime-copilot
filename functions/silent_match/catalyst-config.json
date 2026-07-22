@@ -4,6 +4,7 @@
     "stack": "python_3_9",
     "type": "advancedio",
     "env_variables": {
+      "QUICKML_ORG_ID": "60075198995",
       "QUICKML_EMBEDDINGS_ENDPOINT": "",
       "QUICKML_EMBEDDINGS_MODEL": "multilingual-v1",
       "QUICKML_EMBEDDINGS_TIMEOUT": "10",
