@@ -22,3 +22,17 @@ def create_handler(api):
         return make_response(jsonify(body), status)
 
     return handler
+
+
+def handler(request):
+    import zcatalyst_sdk
+    from flask import jsonify, make_response
+
+    try:
+        from .runtime import build_api
+    except ImportError:
+        from runtime import build_api
+
+    api = build_api(zcatalyst_sdk.initialize())
+    body, status = handle_request(request, api)
+    return make_response(jsonify(body), status)

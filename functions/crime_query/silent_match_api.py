@@ -19,13 +19,14 @@ def _value(value):
 
 class SilentMatchAPI:
     def __init__(self, caller_loader, access_resolver, case_loader,
-                 matcher, scanner, repository):
+                 matcher, scanner, repository, scanner_factory=None):
         self.caller_loader = caller_loader
         self.access_resolver = access_resolver
         self.case_loader = case_loader
         self.matcher = matcher
         self.scanner = scanner
         self.repository = repository
+        self.scanner_factory = scanner_factory
 
     def handle(self, method, path, payload=None):
         payload = payload or {}
@@ -72,7 +73,8 @@ class SilentMatchAPI:
         context = self._context(payload["employee_id"])
         trigger = payload.get("trigger_source", "batch")
         require_capability(context, "run_live_scan" if trigger == "live" else "run_batch_scan")
-        result = self.scanner.scan(
+        scanner = self.scanner_factory(context) if self.scanner_factory else self.scanner
+        result = scanner.scan(
             date_window=payload.get("date_window"),
             anchor_case_id=payload.get("anchor_case_id"),
             trigger_source=trigger,

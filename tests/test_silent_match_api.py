@@ -84,3 +84,16 @@ def test_catalyst_request_adapter_delegates_method_path_and_json():
     body, status = handle_request(Request(), api())
     assert status == 200
     assert body["run_id"] == "run-1"
+
+
+def test_scan_uses_request_access_context_factory():
+    class ContextScanner(Scanner):
+        pass
+    seen = []
+    service = api()
+    service.scanner_factory = lambda context: seen.append(context) or ContextScanner()
+    status, _ = service.handle("POST", "/scan", {
+        "employee_id": 9, "anchor_case_id": 1, "trigger_source": "live",
+    })
+    assert status == 200
+    assert seen

@@ -46,3 +46,28 @@ class SqliteMoIndex:
         scored.sort(key=lambda item: (-item[0], int(item[1]["case_id"])))
         return [IndexHit(int(case["case_id"]), case["crime_no"], round(score, 6), case.get("narrative", ""), self.index_version)
                 for score, case in scored[:limit]]
+
+
+class OperationalMoIndex:
+    """Catalyst Data Store persistence adapter with in-memory search inputs."""
+
+    def __init__(self, db, index_version="mo-index-v1"):
+        self.db = db
+        self.index_version = index_version
+
+    def upsert(self, records):
+        for record in records:
+            vector = list(record.vector)
+            self.db.insert_operational("MoEmbeddingRecord", {
+                "CaseMasterID": record.case_id,
+                "CrimeNo": record.crime_no,
+                "IndexVersion": self.index_version,
+                "Provider": record.provider,
+                "VectorJSON": json.dumps(vector),
+                "UpdatedAt": record.updated_at,
+            })
+
+    def search(self, query_vector, cases, limit=10, excluded_case_id=None):
+        return SqliteMoIndex(None, self.index_version).search(
+            query_vector, cases, limit, excluded_case_id,
+        )
