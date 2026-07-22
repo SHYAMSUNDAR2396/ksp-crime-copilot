@@ -1,6 +1,7 @@
 import pytest
 
 from functions.crime_query.conversation import (
+    CatalystCacheConversationStore,
     ConversationTurn,
     InMemoryConversationStore,
     merge_follow_up,
@@ -41,3 +42,18 @@ def test_follow_up_and_request_validation():
     }
     with pytest.raises(ValueError):
         validate_voice_request({"employee_id": 9})
+
+
+def test_cache_store_round_trips_owned_turns():
+    class Cache:
+        def __init__(self):
+            self.values = {}
+        def put(self, key, value):
+            self.values[key] = value
+        def get(self, key):
+            return self.values.get(key)
+
+    store = CatalystCacheConversationStore(Cache())
+    store.append("s1", 9, ConversationTurn(1, "voice", "hello", "en", ("FIR/1",)))
+    assert store.load("s1", 9).turns[0].citations == ("FIR/1",)
+    assert store.load("s1", 10).turns == ()

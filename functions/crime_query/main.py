@@ -10,7 +10,7 @@ import uuid
 try:
     # Local/test context: main.py imported as functions.crime_query.main.
     from . import access, agent, catalog, policy_audit, supervisor, translate
-    from .conversation import ConversationTurn
+    from .conversation import CatalystCacheConversationStore, ConversationTurn
     from .db import ZcqlDB
     from .llm import QuickMLLLM
     from .rbac import MASK
@@ -20,7 +20,7 @@ except ImportError:
     # importlib.util.spec_from_file_location with no parent package,
     # dependencies vendored flat alongside it.
     import access, agent, catalog, policy_audit, supervisor, translate
-    from conversation import ConversationTurn
+    from conversation import CatalystCacheConversationStore, ConversationTurn
     from db import ZcqlDB
     from llm import QuickMLLLM
     from rbac import MASK
@@ -181,6 +181,12 @@ def handler(request):
     translator = translate.QuickMLTranslator(llm)
 
     payload = request.get_json(silent=True) or {}
+    if payload.get("input_mode") == "voice" and payload.get("session_id") is not None:
+        conversation_store = CatalystCacheConversationStore(app.cache())
+        result = handle_voice_question(
+            payload, db, llm, translator, dt.date.today(), conversation_store,
+        )
+        return make_response(jsonify(result), 403 if result["refused"] else 200)
     result = handle_question(payload, db, llm, translator, dt.date.today())
 
     return make_response(jsonify(result), 403 if result["refused"] else 200)
