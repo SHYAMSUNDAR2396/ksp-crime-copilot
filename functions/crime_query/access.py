@@ -1,12 +1,7 @@
 """Rank-derived capability access policy for supervisor-facing actions."""
 
 from dataclasses import dataclass
-from typing import FrozenSet, Mapping, Optional, Sequence, Tuple
-
-try:
-    from .rbac import Caller
-except ImportError:
-    from rbac import Caller
+from typing import FrozenSet, Optional, Tuple
 
 
 CAPABILITY_DENIED = "CAPABILITY_DENIED"
@@ -66,8 +61,8 @@ def _immutable_scope(ids):
 def _capabilities_for_bucket(bucket):
     shared_reads = {
         "query_structured_cases",
-        "query_narrative_cases",
-        "query_similar_cases",
+        "retrieve_narratives",
+        "retrieve_similar_cases",
         "export_conversation",
     }
 
@@ -178,7 +173,7 @@ def require_capability(context, capability):
 
 def _in_scope(value, scope_ids):
     if value is None:
-        return True
+        return False
     if scope_ids is None:
         return True
     return value in scope_ids
@@ -186,8 +181,12 @@ def _in_scope(value, scope_ids):
 
 def can_read_case(context, case_row):
     require_capability(context, "query_structured_cases")
-    return _in_scope(case_row.get("PoliceStationID"), context.unit_ids) and _in_scope(
-        case_row.get("DistrictID"), context.district_ids
+    station_id = case_row.get("PoliceStationID")
+    district_id = case_row.get("DistrictID")
+    if station_id is None or district_id is None:
+        return False
+    return _in_scope(station_id, context.unit_ids) and _in_scope(
+        district_id, context.district_ids
     )
 
 
@@ -201,7 +200,19 @@ def _non_empty_note(alert):
 
 
 def _visible_alert_cases(alert):
-    return alert.get("anchor_case", {}), alert.get("matched_case", {})
+    return alert.get("anchor_case"), alert.get("matched_case")
+
+
+def _assigned_employee_id(case_row):
+    for field in ("PolicePersonID", "assigned_employee_id", "IOID"):
+        employee_id = case_row.get(field)
+        if employee_id is not None:
+            return employee_id
+    return None
+
+
+def _assigned_to_caller(case_row, employee_id):
+    return _assigned_employee_id(case_row) == employee_id
 
 
 def can_act_on_alert(context, alert, action):
@@ -225,9 +236,27 @@ def can_act_on_alert(context, alert, action):
         )
 
     anchor_case, matched_case = _visible_alert_cases(alert)
+    if anchor_case is None or matched_case is None:
+        raise AccessPolicyError(
+            SCOPE_DENIED, "Alert cases are outside the caller's scope"
+        )
+
     if not can_read_case_pair(context, anchor_case, matched_case):
         raise AccessPolicyError(
             SCOPE_DENIED, "Alert cases are outside the caller's scope"
+        )
+
+    if (
+        context.access_bucket == BUCKET_SI_IO
+        and action in ("Linked", "Dismissed")
+        and not (
+            _assigned_to_caller(anchor_case, context.employee_id)
+            and _assigned_to_caller(matched_case, context.employee_id)
+        )
+    ):
+        raise AccessPolicyError(
+            ACTION_DENIED,
+            "Alert disposition requires the caller to be assigned to both cases",
         )
 
     if action in ("Linked", "Dismissed") and not _non_empty_note(alert):
