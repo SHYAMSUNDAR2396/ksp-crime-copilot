@@ -32,6 +32,75 @@ def test_supervisor_omits_agents_without_capability():
     assert "Composition Agent" in selected
 
 
+def test_graph_task_orders_structured_narrative_graph_then_composition():
+    context = _context(
+        ("query_structured_cases", "retrieve_narratives", "view_graph")
+    )
+
+    selected = select_agents("graph", context)
+
+    assert selected == (
+        "Structured Query Agent",
+        "Narrative Retrieval Agent",
+        "Graph Agent",
+        "Composition Agent",
+    )
+
+
+def test_mixed_task_orders_all_available_evidence_agents_before_composition():
+    context = _context(
+        ("query_structured_cases", "retrieve_narratives", "view_graph")
+    )
+
+    selected = select_agents("mixed", context)
+
+    assert selected == (
+        "Structured Query Agent",
+        "Narrative Retrieval Agent",
+        "Graph Agent",
+        "Analytics Agent",
+        "Composition Agent",
+    )
+
+
+def test_silent_match_task_orders_structured_narrative_graph_silent_match_then_composition():
+    context = _context(
+        (
+            "query_structured_cases",
+            "retrieve_narratives",
+            "view_graph",
+            "view_cross_jurisdiction_alerts",
+        )
+    )
+
+    selected = select_agents("silent_match", context)
+
+    assert selected == (
+        "Structured Query Agent",
+        "Narrative Retrieval Agent",
+        "Graph Agent",
+        "Silent-Match Agent",
+        "Composition Agent",
+    )
+
+
+def test_graph_task_keeps_optional_agents_but_denies_when_graph_capability_is_missing():
+    context = _context(("query_structured_cases", "retrieve_narratives"))
+
+    task = build_task_context(
+        request_id="req-graph",
+        task_type="graph",
+        access_context=context,
+    )
+
+    assert task.selected_agents == (
+        "Structured Query Agent",
+        "Narrative Retrieval Agent",
+        "Composition Agent",
+    )
+    assert task.denials == (("CAPABILITY_DENIED", "view_graph"),)
+
+
 def test_build_task_context_freezes_scope_and_selected_agents():
     context = _context(("query_structured_cases", "retrieve_narratives"))
 
@@ -49,6 +118,7 @@ def test_build_task_context_freezes_scope_and_selected_agents():
     assert task.selected_agents == (
         "Structured Query Agent",
         "Narrative Retrieval Agent",
+        "Analytics Agent",
         "Composition Agent",
     )
 

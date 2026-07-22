@@ -1,10 +1,21 @@
 """Stable, identifier-safe policy audit records."""
 
 from dataclasses import dataclass, field
+import re
 from typing import Tuple
+
+try:
+    from .db import DBError
+except ImportError:
+    from db import DBError
 
 
 POLICY_VERSION = "access-policy-v1"
+CRIMENO_RE = re.compile(r"\b\d{18}\b")
+SAFE_RESOURCE_IDENTIFIER_RE = re.compile(
+    r"^(unit|district|employee|task|capability|scope|resource):[a-z0-9_.-]+$"
+)
+SAFE_TASK_ID_RE = re.compile(r"^(req-[a-z0-9_.-]+|[0-9a-f-]{36})$")
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,28 @@ def _stable_bundle_ids(bundles):
     return tuple(bundle.bundle_id for bundle in bundles)
 
 
+def _sanitize_resource_identifier(resource_identifier):
+    if not resource_identifier:
+        return ""
+    if CRIMENO_RE.search(resource_identifier):
+        return ""
+    if not SAFE_RESOURCE_IDENTIFIER_RE.fullmatch(resource_identifier):
+        return ""
+    return resource_identifier
+
+
+def _sanitize_task_id(task_id):
+    if SAFE_TASK_ID_RE.fullmatch(task_id):
+        return task_id
+    return ""
+
+
+def _text(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 def record_policy_decision(
     context,
     capability,
@@ -67,7 +100,9 @@ def record_policy_decision(
         capability=capability,
         task_id=task_id,
         resource_type=resource_type,
-        resource_identifier=resource_identifier if allowed else "",
+        resource_identifier=_sanitize_resource_identifier(resource_identifier)
+        if allowed
+        else "",
         result="allowed" if allowed else "denied",
         policy_code=policy_code,
         action=action,
@@ -104,3 +139,32 @@ def record_agent_selection(task, bundles, outcome):
         evidence_bundle_ids=_stable_bundle_ids(bundles),
         outcome=outcome,
     )
+
+
+def persist_record(db, record, now):
+    task_id = _sanitize_task_id(record.task_id)
+    executed = ["outcome={0}".format(record.outcome or record.result)]
+    if task_id:
+        executed.insert(0, "task={0}".format(task_id))
+
+    try:
+        db.append_audit(
+            EmployeeID=record.employee_id,
+            RankHierarchy=record.rank_hierarchy,
+            Question="policy_audit:{0}:{1}:{2}".format(
+                record.action or "record",
+                record.resource_type or "unknown",
+                record.result,
+            ),
+            GeneratedSQL="capability={0} policy={1}".format(
+                record.capability or "",
+                record.policy_code or "",
+            ).strip(),
+            ExecutedSQL=" ".join(part for part in executed if part),
+            CrimeNos="",
+            RowCount=0 if record.result == "denied" else len(record.evidence_bundle_ids),
+            LoggedAt=_text(now),
+        )
+    except DBError:
+        return False
+    return True

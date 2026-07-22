@@ -36,6 +36,17 @@ def _identifying_values(rows):
     return values
 
 
+def _audit_now(today):
+    return dt.datetime.combine(today, dt.time(0, 0))
+
+
+def _task_type(payload):
+    task_type = payload.get("task_type")
+    if task_type in supervisor.TASK_AGENT_ORDER:
+        return task_type
+    return "structured_query"
+
+
 def handle_question(payload, db, llm, translator, today):
     """Pure core. No Catalyst types, no environment reads."""
     question = (payload.get("question") or "").strip()
@@ -53,10 +64,11 @@ def handle_question(payload, db, llm, translator, today):
     access_context = access.resolve_access_context(caller, db)
     task = supervisor.build_task_context(
         request_id=str(payload.get("request_id") or uuid.uuid4()),
-        task_type="structured_query",
+        task_type=_task_type(payload),
         access_context=access_context,
     )
     policy_record = policy_audit.record_agent_selection(task, (), outcome="selected")
+    policy_audit.persist_record(db, policy_record, _audit_now(today))
     if task.denials:
         denial_code, denied_capability = task.denials[0]
         denial_record = policy_audit.record_policy_decision(
@@ -66,9 +78,11 @@ def handle_question(payload, db, llm, translator, today):
             resource_type=task.task_type,
             allowed=False,
             policy_code=denial_code,
+            action="deny_task",
             selected_agents=policy_record.selected_agents,
             outcome="refused",
         )
+        policy_audit.persist_record(db, denial_record, _audit_now(today))
         return {
             "refused": True,
             "answer": "I could not answer that safely. Your access level does not allow this request.",

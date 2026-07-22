@@ -22,7 +22,11 @@ def db(tmp_path):
 
 
 def test_english_question_returns_answer_sql_and_citations(db):
-    payload = {"employee_id": 9, "question": "recent cases"}
+    payload = {
+        "employee_id": 9,
+        "question": "recent cases",
+        "task_type": "structured_query",
+    }
     llm = FakeLLM([SQL, "Two cases found."])
     result = main.handle_question(payload, db, llm, translate.NullTranslator(), TODAY)
     assert result["language"] == "en"
@@ -137,3 +141,42 @@ def test_capability_denial_returns_stable_policy_code_without_identifiers(db, mo
     assert result["citations"] == []
     assert "111111111111111111" not in result["answer"]
     assert llm.prompts == []
+
+
+def test_graph_task_type_denial_persists_safe_policy_audits(db):
+    before = db.execute_raw('SELECT COUNT(*) AS n FROM "AuditLog"')[0]["n"]
+    result = main.handle_question(
+        {
+            "employee_id": 4,
+            "task_type": "graph",
+            "question": "show links for CrimeNo 111111111111111111 and Ravi Kumar",
+        },
+        db,
+        FakeLLM([]),
+        translate.NullTranslator(),
+        TODAY,
+    )
+
+    after = db.execute_raw('SELECT COUNT(*) AS n FROM "AuditLog"')[0]["n"]
+    rows = db.execute_raw(
+        'SELECT * FROM "AuditLog" ORDER BY AuditID DESC LIMIT 2'
+    )
+
+    assert result["refused"] is True
+    assert result["policy_code"] == "CAPABILITY_DENIED"
+    assert result["sql"] == ""
+    assert result["rows"] == []
+    assert result["citations"] == []
+    assert "111111111111111111" not in result["answer"]
+    assert "Ravi Kumar" not in result["answer"]
+    assert after == before + 2
+    assert len(rows) == 2
+    for row in rows:
+        assert row["CrimeNos"] == ""
+        assert "111111111111111111" not in row["Question"]
+        assert "111111111111111111" not in row["GeneratedSQL"]
+        assert "111111111111111111" not in row["ExecutedSQL"]
+        assert "Ravi Kumar" not in row["Question"]
+        assert "Ravi Kumar" not in row["GeneratedSQL"]
+        assert "Ravi Kumar" not in row["ExecutedSQL"]
+    assert rows[0]["RowCount"] == 0

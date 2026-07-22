@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence, Tuple, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 
 CRIMENO_RE = re.compile(r"\b\d{18}\b")
@@ -19,7 +19,8 @@ class EvidenceBundle:
     evidence_signals: Tuple[str, ...]
     confidence: float
     limitations: Tuple[str, ...]
-    model_or_index_version: Union[str, Tuple[str, ...]]
+    index_or_model_version: Union[str, Tuple[str, ...]]
+    elapsed_ms: int
     policy_version: str = POLICY_VERSION
 
     @property
@@ -31,7 +32,7 @@ class EvidenceBundle:
         )
 
     def _version_label(self):
-        version = self.model_or_index_version
+        version = self.index_or_model_version
         if isinstance(version, tuple):
             return "+".join(version)
         return version
@@ -47,7 +48,8 @@ def _scope_denied(bundle):
         evidence_signals=(),
         confidence=0.0,
         limitations=("Evidence bundle was removed by access policy.",),
-        model_or_index_version=bundle.model_or_index_version,
+        index_or_model_version=bundle.index_or_model_version,
+        elapsed_ms=bundle.elapsed_ms,
         policy_version=bundle.policy_version,
     )
 
@@ -120,10 +122,10 @@ def filter_visible_bundle(bundle, is_visible):
     visible = tuple(item for item in bundle.rows_or_entities if is_visible(item))
     if bundle.status == "scope_denied":
         return _scope_denied(bundle)
-    if bundle.rows_or_entities and not visible:
+    if bundle.rows_or_entities and len(visible) != len(bundle.rows_or_entities):
         return _scope_denied(bundle)
 
-    allowed = _authorized_citations(visible or bundle.rows_or_entities)
+    allowed = _authorized_citations(bundle.rows_or_entities)
     citations = tuple(citation for citation in bundle.citations if citation in allowed)
     limitations = list(bundle.limitations)
     if len(citations) != len(bundle.citations):
@@ -135,12 +137,13 @@ def filter_visible_bundle(bundle, is_visible):
         agent_name=bundle.agent_name,
         status=bundle.status,
         claims=bundle.claims,
-        rows_or_entities=visible or bundle.rows_or_entities,
+        rows_or_entities=bundle.rows_or_entities,
         citations=citations,
         evidence_signals=bundle.evidence_signals,
         confidence=bundle.confidence,
         limitations=tuple(limitations),
-        model_or_index_version=bundle.model_or_index_version,
+        index_or_model_version=bundle.index_or_model_version,
+        elapsed_ms=bundle.elapsed_ms,
         policy_version=bundle.policy_version,
     )
 
@@ -164,7 +167,8 @@ def merge_bundles(bundles):
             evidence_signals=(),
             confidence=0.0,
             limitations=("No visible evidence bundles were available.",),
-            model_or_index_version=(),
+            index_or_model_version=(),
+            elapsed_ms=0,
             policy_version=POLICY_VERSION,
         )
 
@@ -206,6 +210,7 @@ def merge_bundles(bundles):
         evidence_signals=tuple(evidence_signals),
         confidence=max(bundle.confidence for bundle in valid),
         limitations=tuple(limitations),
-        model_or_index_version=tuple(model_versions),
+        index_or_model_version=tuple(model_versions),
+        elapsed_ms=max(bundle.elapsed_ms for bundle in valid),
         policy_version=policy_versions[0] if len(policy_versions) == 1 else POLICY_VERSION,
     )

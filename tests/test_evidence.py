@@ -15,7 +15,8 @@ def test_inaccessible_bundle_is_scope_denied_without_identifiers():
         evidence_signals=(),
         confidence=0.8,
         limitations=(),
-        model_or_index_version="test",
+        index_or_model_version="test",
+        elapsed_ms=12,
         policy_version="access-policy-v1",
     )
 
@@ -25,7 +26,37 @@ def test_inaccessible_bundle_is_scope_denied_without_identifiers():
     assert filtered.claims == ()
     assert filtered.citations == ()
     assert filtered.rows_or_entities == ()
+    assert filtered.elapsed_ms == 12
     assert "secret" not in " ".join(filtered.limitations)
+
+
+def test_mixed_visibility_bundle_is_scope_denied_without_leaking_visible_identifiers():
+    bundle = EvidenceBundle(
+        agent_name="Graph Agent",
+        status="ok",
+        claims=("linked",),
+        rows_or_entities=(
+            (("CrimeNo", "111111111111111111"), ("AccusedName", "Visible Person")),
+            (("CrimeNo", "222222222222222222"), ("AccusedName", "Hidden Person")),
+        ),
+        citations=("111111111111111111", "222222222222222222"),
+        evidence_signals=("graph",),
+        confidence=0.7,
+        limitations=(),
+        index_or_model_version="graph-v1",
+        elapsed_ms=25,
+        policy_version="access-policy-v1",
+    )
+
+    filtered = filter_visible_bundle(bundle, lambda item: "111111111111111111" in str(item))
+
+    assert filtered.status == "scope_denied"
+    assert filtered.claims == ()
+    assert filtered.rows_or_entities == ()
+    assert filtered.citations == ()
+    assert filtered.elapsed_ms == 25
+    assert "111111111111111111" not in " ".join(filtered.limitations)
+    assert "Visible Person" not in " ".join(filtered.limitations)
 
 
 def test_merge_bundles_drops_scope_denied_and_unauthorized_citations():
@@ -38,7 +69,8 @@ def test_merge_bundles_drops_scope_denied_and_unauthorized_citations():
         evidence_signals=("structured",),
         confidence=0.9,
         limitations=(),
-        model_or_index_version="structured-v1",
+        index_or_model_version="structured-v1",
+        elapsed_ms=30,
         policy_version="access-policy-v1",
     )
     denied = EvidenceBundle(
@@ -50,7 +82,8 @@ def test_merge_bundles_drops_scope_denied_and_unauthorized_citations():
         evidence_signals=("graph",),
         confidence=0.4,
         limitations=("Dropped by policy",),
-        model_or_index_version="graph-v1",
+        index_or_model_version="graph-v1",
+        elapsed_ms=20,
         policy_version="access-policy-v1",
     )
 
@@ -60,9 +93,10 @@ def test_merge_bundles_drops_scope_denied_and_unauthorized_citations():
     assert merged.citations == ("111111111111111111",)
     assert merged.rows_or_entities == visible.rows_or_entities
     assert "999999999999999999" not in " ".join(merged.limitations)
-    assert merged.model_or_index_version == (
+    assert merged.index_or_model_version == (
         "Structured Query Agent@structured-v1",
     )
+    assert merged.elapsed_ms == 30
     assert merged.policy_version == "access-policy-v1"
 
 
@@ -76,7 +110,8 @@ def test_merge_bundles_records_conflicting_claims_without_averaging_them():
         evidence_signals=(),
         confidence=0.9,
         limitations=(),
-        model_or_index_version="structured-v1",
+        index_or_model_version="structured-v1",
+        elapsed_ms=10,
         policy_version="access-policy-v1",
     )
     second = EvidenceBundle(
@@ -88,7 +123,8 @@ def test_merge_bundles_records_conflicting_claims_without_averaging_them():
         evidence_signals=(),
         confidence=0.2,
         limitations=(),
-        model_or_index_version="graph-v1",
+        index_or_model_version="graph-v1",
+        elapsed_ms=15,
         policy_version="access-policy-v1",
     )
 

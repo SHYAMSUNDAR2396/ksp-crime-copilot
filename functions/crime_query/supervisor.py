@@ -93,12 +93,24 @@ TASK_AGENT_ORDER = {
     "structured_query": ("Structured Query Agent", "Composition Agent"),
     "narrative_query": ("Narrative Retrieval Agent", "Composition Agent"),
     "analytics": ("Structured Query Agent", "Analytics Agent", "Composition Agent"),
-    "graph": ("Structured Query Agent", "Graph Agent", "Composition Agent"),
-    "silent_match": ("Structured Query Agent", "Narrative Retrieval Agent", "Silent-Match Agent", "Composition Agent"),
+    "graph": (
+        "Structured Query Agent",
+        "Narrative Retrieval Agent",
+        "Graph Agent",
+        "Composition Agent",
+    ),
+    "silent_match": (
+        "Structured Query Agent",
+        "Narrative Retrieval Agent",
+        "Graph Agent",
+        "Silent-Match Agent",
+        "Composition Agent",
+    ),
     "mixed": (
         "Structured Query Agent",
         "Narrative Retrieval Agent",
         "Graph Agent",
+        "Analytics Agent",
         "Composition Agent",
     ),
 }
