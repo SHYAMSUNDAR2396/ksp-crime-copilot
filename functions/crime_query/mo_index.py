@@ -58,14 +58,25 @@ class OperationalMoIndex:
     def upsert(self, records):
         for record in records:
             vector = list(record.vector)
-            self.db.insert_operational("MoEmbeddingRecord", {
+            row = {
                 "CaseMasterID": record.case_id,
                 "CrimeNo": record.crime_no,
                 "IndexVersion": self.index_version,
                 "Provider": record.provider,
                 "VectorJSON": json.dumps(vector),
                 "UpdatedAt": record.updated_at,
-            })
+            }
+            existing = self.db.read_operational(
+                "MoEmbeddingRecord", {"CaseMasterID": record.case_id}
+            )
+            if existing:
+                self.db.update_operational(
+                    "MoEmbeddingRecord",
+                    existing[0].get("ROWID", record.case_id),
+                    row,
+                )
+            else:
+                self.db.insert_operational("MoEmbeddingRecord", row)
 
     def search(self, query_vector, cases, limit=10, excluded_case_id=None):
         return SqliteMoIndex(None, self.index_version).search(

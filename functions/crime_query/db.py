@@ -119,11 +119,8 @@ class SqliteDB(object):
             raise DBError("operational table is not allowed")
         assignments = ",".join('"{}" = ?'.format(column) for column in row)
         values = tuple(row[column] for column in row) + (row_id,)
-        key = {"SilentMatchAlert": "AlertID", "SilentMatchAction": "ActionID",
-               "SilentMatchRecipient": "RecipientID", "SilentMatchRun": "RunID",
-               "MoEmbeddingRecord": "CaseMasterID"}[table]
         return self.execute_write(
-            'UPDATE "{}" SET {} WHERE "{}" = ?'.format(table, assignments, key),
+            'UPDATE "{}" SET {} WHERE ROWID = ?'.format(table, assignments),
             values,
         )
 
@@ -138,7 +135,7 @@ class SqliteDB(object):
                 '"{}" = ?'.format(column) for column in filters
             )
             params = tuple(filters[column] for column in filters)
-        return self.execute_raw('SELECT * FROM "{}"{}'.format(table, where), params)
+        return self.execute_raw('SELECT rowid AS ROWID, * FROM "{}"{}'.format(table, where), params)
 
     def close(self):
         self._conn.close()
@@ -227,19 +224,13 @@ class ZcqlDB(object):
         except Exception as err:
             raise DBError("audit write failed: {0}".format(err))
 
-    @staticmethod
-    def _operational_key(table):
-        return {"SilentMatchAlert": "AlertID", "SilentMatchAction": "ActionID",
-                "SilentMatchRecipient": "RecipientID", "SilentMatchRun": "RunID",
-                "MoEmbeddingRecord": "CaseMasterID"}[table]
-
     def insert_operational(self, table, row):
         if table not in catalog.OPERATIONAL_TABLES:
             raise DBError("operational table is not allowed")
         try:
             result = self._datastore.table(table).insert_row(dict(row))
             if isinstance(result, dict):
-                return result.get("ROWID") or result.get(self._operational_key(table))
+                return result.get("ROWID")
             return result
         except Exception as err:
             raise DBError("operational insert failed: {0}".format(err))
@@ -272,7 +263,7 @@ class ZcqlDB(object):
                 escaped = str(value).replace("'", "''")
                 predicates.append("{} = '{}'".format(column, escaped))
         where = " WHERE " + " AND ".join(predicates) if predicates else ""
-        return self.execute_raw("SELECT * FROM {}{}".format(table, where))
+        return self.execute_raw("SELECT ROWID, * FROM {}{}".format(table, where))
 
     def close(self):
         pass

@@ -101,12 +101,12 @@ class SilentMatchRepository:
             'INSERT INTO "SilentMatchRecipient" (AlertID, EmployeeID) VALUES (?, ?)',
             (alert_id, employee_id),
         )
-        rows = self._read("SilentMatchRecipient", {"RecipientID": recipient_id})
+        rows = self._read("SilentMatchRecipient", {"ROWID": recipient_id})
         return rows[0] if rows else {"RecipientID": recipient_id, "AlertID": alert_id,
                                      "EmployeeID": employee_id}
 
     def create_run(self, run_id, trigger_source, started_at):
-        self._insert(
+        return self._insert(
             "SilentMatchRun",
             {"RunID": run_id, "TriggerSource": trigger_source, "Status": "running",
              "StartedAt": started_at},
@@ -115,8 +115,10 @@ class SilentMatchRepository:
         )
 
     def finish_run(self, run_id, result, finished_at):
+        rows = self._read("SilentMatchRun", {"RunID": run_id})
+        row_id = rows[0].get("ROWID", run_id) if rows else run_id
         self._update(
-            "SilentMatchRun", run_id,
+            "SilentMatchRun", row_id,
             {"Status": "failed" if result.failures else "completed",
              "AnchorsSeen": result.anchors_seen,
              "CandidatesSeen": result.candidates_seen,
@@ -134,5 +136,5 @@ class SilentMatchRepository:
         return self._read("SilentMatchAlert", {"Status": status})
 
     def get_alert(self, alert_id):
-        rows = self._read("SilentMatchAlert", {"AlertID": alert_id})
+        rows = self._read("SilentMatchAlert", {"ROWID": alert_id})
         return rows[0] if rows else None
