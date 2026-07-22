@@ -39,6 +39,7 @@ class Answer:
     refused: bool = False
     refusal_reason: str = ""
     audit_failed: bool = False
+    policy_code: str = ""
 
 
 def crime_numbers(rows):

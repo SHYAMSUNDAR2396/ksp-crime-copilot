@@ -2,6 +2,7 @@ import datetime as dt
 
 import pytest
 
+from functions.crime_query.access import AccessContext
 from functions.crime_query import db as db_module
 from functions.crime_query import main, translate
 from functions.crime_query.llm import FakeLLM
@@ -103,3 +104,36 @@ def test_response_never_leaks_the_generated_sql_on_refusal(db):
     )
     assert result["refused"] is True
     assert result["sql"] == ""
+
+
+def test_capability_denial_returns_stable_policy_code_without_identifiers(db, monkeypatch):
+    llm = FakeLLM([])
+
+    def deny_structured(_caller, _db):
+        return AccessContext(
+            employee_id=9,
+            rank_hierarchy=6,
+            access_bucket="CONSTABLE",
+            unit_ids=(1,),
+            district_ids=(1,),
+            capabilities=frozenset(),
+            sensitive_data_policy="rbac_masked",
+            alert_actions=frozenset(),
+            audit_visibility="own_actions",
+        )
+
+    monkeypatch.setattr(main.access, "resolve_access_context", deny_structured)
+    result = main.handle_question(
+        {"employee_id": 9, "question": "show case 111111111111111111 links"},
+        db,
+        llm,
+        translate.NullTranslator(),
+        TODAY,
+    )
+
+    assert result["refused"] is True
+    assert result["policy_code"] == "CAPABILITY_DENIED"
+    assert result["rows"] == []
+    assert result["citations"] == []
+    assert "111111111111111111" not in result["answer"]
+    assert llm.prompts == []

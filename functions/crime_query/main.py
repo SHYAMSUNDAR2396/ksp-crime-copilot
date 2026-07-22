@@ -5,10 +5,11 @@ shape the response. Everything else is tested library code.
 """
 import datetime as dt
 import os
+import uuid
 
 try:
     # Local/test context: main.py imported as functions.crime_query.main.
-    from . import agent, catalog, translate
+    from . import access, agent, catalog, policy_audit, supervisor, translate
     from .db import ZcqlDB
     from .llm import QuickMLLLM
     from .rbac import MASK
@@ -16,7 +17,7 @@ except ImportError:
     # Catalyst runtime context: main.py loaded standalone via
     # importlib.util.spec_from_file_location with no parent package,
     # dependencies vendored flat alongside it.
-    import agent, catalog, translate
+    import access, agent, catalog, policy_audit, supervisor, translate
     from db import ZcqlDB
     from llm import QuickMLLLM
     from rbac import MASK
@@ -47,7 +48,36 @@ def handle_question(payload, db, llm, translator, today):
     caller = db.caller_for(employee_id) if employee_id is not None else None
     if caller is None:
         return {"refused": True, "answer": "You are not authorised to query this system.",
-                "sql": "", "rows": [], "citations": [], "language": "en"}
+                "sql": "", "rows": [], "citations": [], "language": "en", "policy_code": ""}
+
+    access_context = access.resolve_access_context(caller, db)
+    task = supervisor.build_task_context(
+        request_id=str(payload.get("request_id") or uuid.uuid4()),
+        task_type="structured_query",
+        access_context=access_context,
+    )
+    policy_record = policy_audit.record_agent_selection(task, (), outcome="selected")
+    if task.denials:
+        denial_code, denied_capability = task.denials[0]
+        denial_record = policy_audit.record_policy_decision(
+            context=access_context,
+            capability=denied_capability,
+            task_id=task.request_id,
+            resource_type=task.task_type,
+            allowed=False,
+            policy_code=denial_code,
+            selected_agents=policy_record.selected_agents,
+            outcome="refused",
+        )
+        return {
+            "refused": True,
+            "answer": "I could not answer that safely. Your access level does not allow this request.",
+            "sql": "",
+            "rows": [],
+            "citations": [],
+            "language": "en",
+            "policy_code": denial_record.policy_code,
+        }
 
     language = translate.detect(question)
     try:
@@ -55,7 +85,7 @@ def handle_question(payload, db, llm, translator, today):
     except translate.TranslationError:
         return {"refused": True,
                 "answer": "Translation service is unavailable; please try again in English.",
-                "sql": "", "rows": [], "citations": [], "language": "en"}
+                "sql": "", "rows": [], "citations": [], "language": "en", "policy_code": ""}
 
     result = agent.answer(english_question, caller, db, llm, today)
 
@@ -71,6 +101,7 @@ def handle_question(payload, db, llm, translator, today):
         "filter_citation": result.filter_citation,
         "hallucinated": result.hallucinated_crimenos,
         "language": language,
+        "policy_code": result.policy_code,
     }
 
 
