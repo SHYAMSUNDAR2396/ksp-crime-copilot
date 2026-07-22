@@ -25,7 +25,7 @@ The provided schema is a fully relational CCTNS-style model: 23 tables centred o
 ```mermaid
 flowchart TB
   subgraph EXP["EXPERIENCE — Web Client Hosting"]
-    UI["Chat UI · citation panel · graph view · hotspot map · role badge"]
+    UI["Chatbot UI · text input · citations · graph/map views · role badge"]
     VOICE["Voice I/O<br/>(browser Web Speech API)"]
     AUTHN["Authentication<br/>login · role from Rank/Unit"]
   end
@@ -96,8 +96,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  IN["Utterance<br/>voice / text · KN or EN"] --> STT["Speech→text<br/>Web Speech / Zia"]
-  STT --> AUTHZ["API Gateway<br/>authenticate + role scope"]
+  VOICEQ["Voice query<br/>KN / EN / mixed"] --> STT["Speech→text<br/>Web Speech / Zia"]
+  CHATQ["Chatbot text query<br/>KN / EN"] --> INPUT["Final query text"]
+  STT --> INPUT
+  INPUT --> AUTHZ["API Gateway<br/>authenticate + role scope"]
   AUTHZ --> LANG["Detect + pivot to English<br/>(Translation Agent · Zia)"]
   LANG --> CTX{"Follow-up?"}
   CTX -- yes --> MEM[("Cache<br/>prior filters")]
@@ -112,7 +114,7 @@ flowchart LR
   ENV --> VER["Verification + Citation Agent<br/>merge · conflict check · RBAC"]
   VER --> COMP["Composition Agent<br/>Qwen 2.5-14B"]
   COMP --> BACK["Translation Agent<br/>IDs/names verbatim"]
-  BACK --> OUT["Answer + citations<br/>(+ voice, + PDF on request)"]
+  BACK --> OUT["Answer + citations<br/>(chat + voice, + PDF on request)"]
   AUTHZ -. every request .-> AUD[("Audit log<br/>Data Store")]
   VER -. result set .-> AUD
 ```
@@ -121,7 +123,7 @@ flowchart LR
 
 | Catalyst service | Role in this build |
 |---|---|
-| Web Client Hosting | Chat UI, graph/map views, PDF download |
+| Web Client Hosting | Chatbot text input, speech controls, graph/map views, citations, PDF download |
 | Authentication | Login; role derived from `Rank.Hierarchy` + `Employee.UnitID`/`DistrictID` |
 | API Gateway | Zero-trust authZ, throttling, audit hook on every call |
 | Circuits / Functions | Supervisor, typed task context, specialist agents, retries, and evidence verification |
@@ -304,10 +306,11 @@ enforced in the serving Function, not the UI, and is never relaxed by a
 capability grant. Caste/religion never enter semantic text, graph features,
 alert scoring, summaries, exports, or audit logs.
 
-### 1.6 Kannada bridge, voice & conversation features
+### 1.6 Chatbot, Kannada bridge, voice & conversation features
 
 - **Translate–reason–translate**: the Translation Agent detects language, pivots to English for specialist reasoning, and renders verified output back in Kannada; names and CrimeNos are preserved verbatim.
-- **Voice interaction**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; after that it enters the Supervisor Agent as a normal request. Spike Kannada coverage in-browser early, with a Zia/STT service and typed-input fallback available during rollout.
+- **Chatbot query interface**: the Web Client Hosting experience provides a persistent text composer for English, Kannada, and mixed-language questions. Typed messages enter the same API contract, Supervisor task graph, RBAC filters, evidence verification, citations, session context, and audit trail as voice queries.
+- **Voice querying**: browser-native Web Speech API (`SpeechRecognition`/`SpeechSynthesis`) converts voice↔text at the client; the final transcript enters the same query path as a chatbot message. Spike Kannada coverage in-browser early, with a Zia/STT service and typed-input fallback available during rollout.
 - **Context-aware conversations**: Catalyst Cache keyed by session holds active filters and the prior verified task context. The Supervisor reads it before building the next task graph, so "now just the two-wheelers" narrows the previous result.
 - **PDF export of conversation history**: transcript + citations already exist in Cache/audit; a SmartBrowz Function renders them to PDF on request. No new data path.
 
@@ -460,7 +463,7 @@ flowchart LR
 ## 3. Demo runbook (9 beats) & metrics
 
 **Beats — every query pre-staged against known synthetic records:**
-1. **Kannada voice question, cited answer** — constable login asks *by voice* in Kannada: "ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?" → spoken + written Kannada answer with CrimeNo citations.
+1. **Chatbot + voice query parity** — constable login submits "ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?" in the chatbot, then repeats it by voice → written/spoken Kannada answer with identical CrimeNo citations.
 2. **Context follow-up** — "ಅದರಲ್ಲಿ ದ್ವಿಚಕ್ರ ವಾಹನ ಕಳ್ಳತನ ಮಾತ್ರ" ("only the two-wheeler ones") → system narrows the previous result using session memory.
 3. **RBAC made visible** — switch to Inspector login, same question → richer rows (demographics unmasked, more stations); say the sentence: "same engine, role-scoped."
 4. **Hidden link + network** — "Is the accused in FIR X connected to any other cases?" → graph lights up: *Ravi Kumar / Ravi K, 4 FIRs, 3 stations*, with match confidence; zoom out to the community view showing the wider ring and its most-connected node.
@@ -476,6 +479,7 @@ flowchart LR
 - Recall@5 for similar-case retrieval on seeded MO pairs
 - p95 end-to-end latency (target < 8 s)
 - Kannada parity spot-check: 10 paired KN/EN questions, same answers
+- Chatbot/voice parity: same transcript produces the same answer, citations, and RBAC scope
 - Specialist bundle completion rate and p95 supervisor latency
 - Evidence conflict rate and unsupported-claim rejection rate
 - Batch/live silent-match parity on seeded case pairs
@@ -486,6 +490,7 @@ flowchart LR
 ## 4. Definition of done
 
 - Supervisor dispatch, typed evidence envelopes, verification, and backward-compatible responses pass contract and failure-path tests.
+- Chatbot text and speech queries use the same authorization, evidence, citation, session, and audit path.
 - All planned features pass in a full run-through **on Catalyst, not localhost**, with documented fallback behavior where an external dependency is unavailable.
 - Batch and post-ingestion live silent-match scans produce identical evidence for identical fixtures and do not duplicate alerts.
 - Cross-lingual MO matches return original Kannada/English excerpts, both `CrimeNo`s, and model/index version.
