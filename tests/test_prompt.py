@@ -47,6 +47,19 @@ def test_prompt_states_the_hard_rules(db):
         assert rule.lower() in text.lower(), rule
 
 
+def test_prompt_names_catalyst_zcql_as_execution_dialect(db):
+    text = prompt.build_prompt("recent burglary cases", db, TODAY)
+    assert "Zoho Catalyst ZCQL" in text
+    assert "not generic SQLite" in text
+
+
+def test_prompt_includes_runtime_fk_map_and_server_scope_boundary(db):
+    text = prompt.build_prompt("recent burglary cases", db, TODAY)
+    assert "Catalyst Foreign Key" in text
+    assert "parent.ROWID" in text
+    assert "server adds and verifies" in text
+
+
 def test_prompt_teaches_rowid_joins(db):
     """ZCQL Foreign Key columns reference the parent's internal ROWID, not
     any business primary key -- confirmed against a live deployment. The

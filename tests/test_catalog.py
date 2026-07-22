@@ -105,3 +105,10 @@ def test_describe_mentions_every_table(doc_tables):
     described = catalog.describe()
     for table in doc_tables:
         assert table in described
+
+
+def test_describe_foreign_keys_uses_catalyst_parent_rowids():
+    described = catalog.describe_foreign_keys()
+    assert "Catalyst Foreign Key joins (child column -> parent ROWID)" in described
+    assert "CaseMaster.PoliceStationID -> Unit.ROWID" in described
+    assert "CaseMaster.PoliceStationID -> Unit.UnitID" not in described

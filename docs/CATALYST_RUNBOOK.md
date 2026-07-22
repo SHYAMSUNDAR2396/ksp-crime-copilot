@@ -16,6 +16,19 @@ Confirm Step 3's three smoke-test curls actually pass before treating
 this as fully closed — see "Re-verify Step 3's smoke tests" below.
 Steps 4–5 remain open pending that confirmation.
 
+## Query-generation contract
+
+The production query dialect is Zoho Catalyst ZCQL, not generic SQLite. The
+prompt is built from the live catalog and lookup values and includes the
+declared Catalyst Foreign Key map. Every such join targets the parent table's
+internal `ROWID` (for example, `CaseMaster.PoliceStationID = Unit.ROWID`),
+never the parent's business-key column. The validator enforces this contract
+before the server applies the caller's RBAC predicate and executes the query.
+
+Operational tables such as `AuditLog` are deliberately absent from the
+NL-to-ZCQL catalog. Local SQLite remains a deterministic test adapter only;
+the live smoke tests below are required to verify Catalyst relationship setup.
+
 ## 1. Task 2 — confirm the ZCQL/Data Store call surface — DONE
 
 `functions/crime_query/db.py`'s `ZcqlDB` class assumed specific SDK method

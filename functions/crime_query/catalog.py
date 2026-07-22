@@ -319,12 +319,16 @@ def sqlite_ddl():
 
 
 def describe():
-    """Compact schema text for the NL->SQL prompt."""
+    """Compact case-schema text for the NL-to-ZCQL prompt."""
     lines = []
     for table, columns in TABLES.items():
         lines.append("{0}({1})".format(table, ", ".join(columns)))
-    lines.append("")
-    lines.append("Foreign keys (every join must target ROWID, see rule below):")
+    return "\n".join(lines)
+
+
+def describe_foreign_keys():
+    """Render the live Catalyst relationship contract for the prompt."""
+    lines = ["Catalyst Foreign Key joins (child column -> parent ROWID):"]
     for child_t, child_c, parent_t, _parent_c in FOREIGN_KEYS:
         lines.append(
             "  {0}.{1} -> {2}.ROWID".format(child_t, child_c, parent_t)

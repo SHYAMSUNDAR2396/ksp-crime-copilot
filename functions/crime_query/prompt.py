@@ -1,4 +1,4 @@
-"""Prompt construction for NL->SQL generation and answer composition.
+"""Prompt construction for NL-to-Catalyst-ZCQL generation and answer composition.
 
 Lookup values are read live from the database so the model never invents a
 crime head or a station that does not exist in the data (PLAN.md 1.1).
@@ -25,7 +25,9 @@ LOOKUP_FIELDS = [
 MAX_ROWS_IN_ANSWER_PROMPT = 40
 
 _RULES = """Rules, all mandatory:
-1. Emit exactly one SELECT statement. Nothing else. No INSERT, UPDATE, DELETE, DROP.
+1. Emit exactly one read-only SELECT statement. Nothing else. No INSERT, UPDATE,
+   DELETE, DROP, or any other mutation. ZCQL is the execution dialect; do not emit
+   generic SQLite or PostgreSQL syntax.
 2. Qualify every column with its table name, e.g. CaseMaster.CrimeNo, never CrimeNo.
 3. Use only these functions: COUNT, SUM, AVG, MIN, MAX. No date functions, no CAST,
    no string functions. Never write COUNT(*) - name an explicit column instead, e.g.
@@ -42,12 +44,14 @@ _RULES = """Rules, all mandatory:
    complainant name) or reproduces case narrative text (BriefFacts) - then it must
    select CaseMaster.CrimeNo too, so those rows can still be cited.
 8. Add a LIMIT. Never above 200.
-9. Use only the exact lookup values listed below. If the question names something not
-   in those lists, choose the closest listed value.
-10. Every JOIN's ON condition must compare the foreign key column against the
-    parent table's ROWID pseudo-column, e.g. JOIN Unit ON CaseMaster.PoliceStationID
-    = Unit.ROWID. Never compare against the parent's own named primary-key column
-    (e.g. never Unit.UnitID), even though it is listed in the schema below.
+9. Use only the exact lookup values listed below. Never invent IDs or names.
+10. Every JOIN must use a declared Catalyst Foreign Key relationship and an ON
+    condition. A foreign key column must compare against parent.ROWID, e.g.
+    JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID. Never compare against
+    the parent's own named primary-key column (e.g. never Unit.UnitID).
+11. Operational tables are unavailable to the model and cannot be queried.
+12. Do not add the caller's RBAC predicate yourself; the server adds and verifies
+    the authorization scope after validation.
 
 Return only the SQL. No explanation, no markdown fence."""
 
@@ -76,15 +80,19 @@ def build_prompt(question, db, today):
         for key, vals in values.items()
     )
     return (
-        "You translate questions about the Karnataka police crime database into SQL.\n\n"
+        "You generate one read-only Zoho Catalyst ZCQL query for the Karnataka "
+        "police crime database. ZCQL is the execution dialect, not generic SQLite "
+        "or PostgreSQL.\n\n"
         "Today's date is {today}.\n\n"
         "Schema:\n{schema}\n\n"
+        "{foreign_keys}\n\n"
         "Lookup values that exist in the data:\n{lookups}\n\n"
         "{rules}\n\n"
         "Question: {question}\nSQL:"
     ).format(
         today=today.isoformat(),
         schema=catalog.describe(),
+        foreign_keys=catalog.describe_foreign_keys(),
         lookups=lookup_block,
         rules=_RULES,
         question=question,
