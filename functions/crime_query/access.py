@@ -179,8 +179,8 @@ def _in_scope(value, scope_ids):
     return value in scope_ids
 
 
-def can_read_case(context, case_row):
-    require_capability(context, "query_structured_cases")
+def can_read_case(context, case_row, capability="query_structured_cases"):
+    require_capability(context, capability)
     station_id = case_row.get("PoliceStationID")
     district_id = case_row.get("DistrictID")
     if station_id is None or district_id is None:
@@ -190,8 +190,9 @@ def can_read_case(context, case_row):
     )
 
 
-def can_read_case_pair(context, left_case, right_case):
-    return can_read_case(context, left_case) and can_read_case(context, right_case)
+def can_read_case_pair(context, left_case, right_case, capability="query_structured_cases"):
+    return (can_read_case(context, left_case, capability)
+            and can_read_case(context, right_case, capability))
 
 
 def _non_empty_note(alert):
