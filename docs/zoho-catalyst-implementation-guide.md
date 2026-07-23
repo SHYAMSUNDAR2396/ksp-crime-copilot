@@ -196,6 +196,8 @@ authenticated Catalyst project:
   which returns the exact visible `CaseMaster` fields and `BriefFacts` only.
 - Supervisor task graphs emit redacted operational metrics to Catalyst logs;
   metrics contain latency/retry/failure metadata but no case data.
+- Queries reaching the validated 200-row cap return `partial: true` and a
+  user-visible limitation instead of implying that the population is complete.
 - Caste and religion remain descriptive aggregate dimensions only and are never
   used as person risk or predictive features.
 - GLM-4.7-Flash returns a composed answer without visible reasoning traces.

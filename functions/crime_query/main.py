@@ -83,12 +83,17 @@ def _evidence_bundle(status, claims=(), rows=(), citations=(), limitations=(), c
 
 
 def _verified_evidence(result):
+    limitations = (
+        ("The validated result set is capped; additional matching rows may exist.",)
+        if result.partial else ()
+    )
     return _evidence_payload(
         "scope_denied" if result.refused else "ok",
         claims=() if result.refused else (result.text,),
         rows=result.rows,
         citations=result.citations,
-        limitations=("No visible structured evidence was available.",) if result.refused else (),
+        limitations=("No visible structured evidence was available.",) if result.refused
+        else limitations,
         confidence=0.0 if result.refused else 1.0,
     )
 
@@ -221,6 +226,7 @@ def handle_question(payload, db, llm, translator, today):
         "citations": result.citations,
         "filter_citation": result.filter_citation,
         "hallucinated": result.hallucinated_crimenos,
+        "partial": result.partial,
         "language": language,
         "policy_code": result.policy_code,
         "evidence": _verified_evidence(result),

@@ -467,7 +467,11 @@
         ? "Authentication required" : "Authenticated officer";
       if (currentTurn !== turnId || result.turn_id && result.turn_id !== currentTurn) return;
       addMessage("assistant", result.answer || "No answer was returned.", result.citations || []);
-      status.textContent = result.refused ? "Request refused safely." : "";
+      status.textContent = result.refused
+        ? "Request refused safely."
+        : result.partial
+          ? "Result set capped; additional matching cases may exist."
+          : "";
       if (result.voice && result.voice.speak && window.speechSynthesis) {
         const utterance = new SpeechSynthesisUtterance(result.voice.text);
         utterance.lang = result.voice.language || "en-IN";

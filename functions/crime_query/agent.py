@@ -40,6 +40,7 @@ class Answer:
     refusal_reason: str = ""
     audit_failed: bool = False
     policy_code: str = ""
+    partial: bool = False
 
 
 @dataclass
@@ -56,6 +57,7 @@ class PreparedQuery:
     citations: list
     filter_citation: str
     now: dt.datetime
+    partial: bool = False
 
 
 class PreparationError(Exception):
@@ -194,6 +196,7 @@ def prepare_query(question, caller, db, llm, today, now=None):
         citations=allowed,
         filter_citation=_filter_citation(executed_sql) if not allowed else "",
         now=now,
+        partial=len(rows) >= validate.MAX_LIMIT,
     )
 
 
@@ -225,6 +228,7 @@ def compose_prepared(prepared):
         filter_citation=prepared.filter_citation,
         hallucinated_crimenos=hallucinated,
         audit_failed=not audit_ok,
+        partial=prepared.partial,
     )
 
 

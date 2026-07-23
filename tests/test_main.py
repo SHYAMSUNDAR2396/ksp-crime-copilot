@@ -38,6 +38,22 @@ def test_english_question_returns_answer_sql_and_citations(db):
     assert result["evidence"]["citations"] == result["citations"]
 
 
+def test_result_cap_is_explicitly_marked_partial(db):
+    capped_sql = (
+        "SELECT CaseMaster.CrimeNo FROM CaseMaster "
+        "WHERE CaseMaster.PoliceStationID = 2 LIMIT 200"
+    )
+    result = main.handle_question(
+        {"employee_id": 9, "question": "all cases"},
+        db, FakeLLM([capped_sql, "The visible result is capped."]),
+        translate.NullTranslator(), TODAY,
+    )
+
+    assert result["refused"] is False
+    assert result["partial"] is True
+    assert "capped" in " ".join(result["evidence"]["limitations"]).lower()
+
+
 def test_unknown_employee_is_rejected_before_any_llm_call(db):
     llm = FakeLLM([])
     result = main.handle_question(
