@@ -23,7 +23,7 @@ The system is deliberately evidence-led:
 
 The repository contains a working Python query backend, deterministic synthetic data generator, SQLite test path, Catalyst Advanced I/O entrypoint, SQL validation, RBAC, translation helpers, citation checks, and test/evaluation harnesses.
 
-The broader product plan covers the Catalyst-hosted chatbot, browser voice interface, multi-agent supervisor, cross-lingual MO matching, derived graph visualization, and cross-jurisdiction silent-match alerts. These local modules are implemented and tested; live Catalyst readiness remains an account-level gate documented in [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
+The broader product plan covers the Catalyst-hosted chatbot, browser voice interface, multi-agent supervisor, cross-lingual MO matching, derived graph visualization, and cross-jurisdiction silent-match alerts. These capabilities are specified in `PLAN.md` and linked implementation documents; many are implemented locally while live Catalyst readiness remains an account-level gate documented in [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
 
 The current workspace has not re-verified live Catalyst readiness: CLI access,
 authenticated principal mapping, RAG/embedding endpoints, and authenticated
@@ -204,7 +204,6 @@ python -m tools.offline_eval
 The offline evaluator replays gold SQL and therefore measures execution and
 evidence plumbing, not live GLM-4.7 quality. Run the authenticated QuickML
 evaluation in the section below for model-quality numbers.
-
 ## Evaluation
 
 The evaluation harness compares generated and gold SQL by executing both and comparing result sets. It reports accuracy, hallucination rate, and p95 latency.
@@ -279,7 +278,6 @@ The same authenticated function also accepts `operation: "network"`,
 graph/aggregate/profile data with an evidence envelope; network and profile
 operations require `case_master_id`, while demographic dimensions are a fixed
 allowlist and sensitive dimensions remain rank-gated aggregate views.
-
 ## Security and Data Handling
 
 - Never commit OAuth tokens, API keys, production exports, or real case data.
