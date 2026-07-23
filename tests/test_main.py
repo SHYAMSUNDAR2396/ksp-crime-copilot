@@ -34,6 +34,8 @@ def test_english_question_returns_answer_sql_and_citations(db):
     assert len(result["citations"]) == 2
     assert "PoliceStationID" in result["sql"]
     assert result["refused"] is False
+    assert result["evidence"]["status"] == "ok"
+    assert result["evidence"]["citations"] == result["citations"]
 
 
 def test_unknown_employee_is_rejected_before_any_llm_call(db):
@@ -97,6 +99,7 @@ def test_translation_error_on_input_side_is_refused_gracefully(db):
     assert result["refused"] is True
     assert result["sql"] == ""
     assert result["rows"] == []
+    assert result["evidence"]["status"] == "scope_denied"
     assert result["citations"] == []
     assert result["language"] == "en"
 
@@ -219,3 +222,41 @@ def test_typed_session_follow_up_reuses_prior_verified_context(db):
     assert second["turn_id"] == 2
     assert "Previous verified question" in llm.prompts[-2]
     assert [turn.turn_id for turn in store.load("text-session", 9).turns] == [1, 2]
+
+
+def test_unauthenticated_typed_session_fails_before_session_store_or_llm(db):
+    class Store:
+        def load(self, *args):
+            raise AssertionError("unauthenticated session must not load state")
+
+        def append(self, *args):
+            raise AssertionError("unauthenticated session must not append state")
+
+    llm = FakeLLM([])
+    result = main.handle_session_question(
+        {"employee_id": None, "session_id": "s", "turn_id": 1, "question": "recent cases"},
+        db, llm, translate.NullTranslator(), TODAY, Store(),
+    )
+
+    assert result["refused"] is True
+    assert result["turn_id"] == 1
+    assert llm.prompts == []
+
+
+def test_malformed_task_type_falls_back_to_structured_task(db):
+    llm = FakeLLM([SQL, "ok"])
+    result = main.handle_question(
+        {"employee_id": 9, "task_type": [], "question": "recent cases"},
+        db, llm, translate.NullTranslator(), TODAY,
+    )
+    assert result["refused"] is False
+
+
+def test_non_string_question_is_rejected_without_llm_call(db):
+    llm = FakeLLM([])
+    result = main.handle_question(
+        {"employee_id": 9, "question": []}, db, llm,
+        translate.NullTranslator(), TODAY,
+    )
+    assert result["refused"] is True
+    assert llm.prompts == []

@@ -47,6 +47,19 @@ def test_graph_task_orders_structured_narrative_graph_then_composition():
     )
 
 
+def test_graph_task_exposes_parallel_specialists_before_composition():
+    task = build_task_context(
+        request_id="req-graph-groups",
+        task_type="graph",
+        access_context=_context(("query_structured_cases", "retrieve_narratives", "view_graph")),
+    )
+
+    assert task.execution_groups == (
+        ("Structured Query Agent", "Narrative Retrieval Agent", "Graph Agent"),
+        ("Composition Agent",),
+    )
+
+
 def test_mixed_task_orders_all_available_evidence_agents_before_composition():
     context = _context(
         ("query_structured_cases", "retrieve_narratives", "view_graph")
@@ -99,6 +112,10 @@ def test_graph_task_keeps_optional_agents_but_denies_when_graph_capability_is_mi
         "Composition Agent",
     )
     assert task.denials == (("CAPABILITY_DENIED", "view_graph"),)
+    assert task.execution_groups == (
+        ("Structured Query Agent", "Narrative Retrieval Agent"),
+        ("Composition Agent",),
+    )
 
 
 def test_build_task_context_freezes_scope_and_selected_agents():

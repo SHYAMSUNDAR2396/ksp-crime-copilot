@@ -11,6 +11,7 @@ class ScoreResult:
     evidence: Tuple[Tuple[str, float], ...]
     persistable: bool
     limitation: str
+    index_version: str = ""
 
 
 @dataclass(frozen=True)

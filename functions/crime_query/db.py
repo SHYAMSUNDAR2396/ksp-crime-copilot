@@ -55,10 +55,45 @@ class SqliteDB(object):
 
     def units_in_district(self, district_id):
         rows = self.execute_raw(
-            'SELECT UnitID FROM "Unit" WHERE DistrictID = ? ORDER BY UnitID',
+            'SELECT Unit.UnitID FROM "Unit" '
+            'JOIN "District" ON Unit.DistrictID = District.rowid '
+            'WHERE District.DistrictID = ? ORDER BY Unit.UnitID',
             (district_id,),
         )
         return [row["UnitID"] for row in rows]
+
+    def command_employee_ids(self, district_ids):
+        """Return active command employees for supplied business districts.
+
+        The approved Employee schema has no employee-level Active column.
+        Rank.Active is therefore the authoritative active-status flag available
+        for this recipient contract; the query never fabricates a column.
+        """
+        values = tuple(sorted({int(value) for value in district_ids}))
+        if not values:
+            return []
+        placeholders = ",".join("?" for _ in values)
+        rows = self.execute_raw(
+            'SELECT Employee.EmployeeID FROM "Employee" '
+            'JOIN "Rank" ON Employee.RankID = Rank.rowid '
+            'JOIN "District" ON Employee.DistrictID = District.rowid '
+            'WHERE District.DistrictID IN ({}) '
+            'AND Rank.Hierarchy <= 3 AND Rank.Active = 1 '
+            'ORDER BY Employee.EmployeeID'.format(placeholders),
+            values,
+        )
+        return [int(row["EmployeeID"]) for row in rows]
+
+    def unit_rowids_for_business_ids(self, unit_ids):
+        values = tuple(int(value) for value in unit_ids)
+        if not values:
+            return []
+        placeholders = ",".join("?" for _ in values)
+        rows = self.execute_raw(
+            'SELECT rowid AS ROWID FROM "Unit" WHERE UnitID IN ({})'.format(placeholders),
+            values,
+        )
+        return [int(row["ROWID"]) for row in rows]
 
     def lookup(self, table, column):
         rows = self.execute_raw(
@@ -71,9 +106,11 @@ class SqliteDB(object):
         # to hold Rank's rowid, not its business RankID, so both backends'
         # join conditions agree (see ZcqlDB.caller_for below).
         rows = self.execute_raw(
-            'SELECT Employee.EmployeeID, Employee.UnitID, Employee.DistrictID, '
+            'SELECT Employee.EmployeeID, Unit.UnitID, District.DistrictID, '
             'Rank.Hierarchy AS RankHierarchy '
             'FROM "Employee" JOIN "Rank" ON Employee.RankID = Rank.rowid '
+            'JOIN "Unit" ON Employee.UnitID = Unit.rowid '
+            'JOIN "District" ON Employee.DistrictID = District.rowid '
             'WHERE Employee.EmployeeID = ?',
             (employee_id,),
         )
@@ -186,6 +223,37 @@ class ZcqlDB(object):
         # ("10" < "2"), and convert so the RBAC IN(...) predicate gets ints.
         return sorted(int(row["UnitID"]) for row in rows)
 
+    def command_employee_ids(self, district_ids):
+        """Return active command employees for supplied business districts.
+
+        Employee has no Active column in the authoritative ER model, so the
+        active Rank flag is the only valid employee-status boundary here.
+        Employee/Rank/District foreign keys contain parent ROWIDs in Catalyst.
+        """
+        values = tuple(sorted({int(value) for value in district_ids}))
+        if not values:
+            return []
+        literals = ", ".join(str(value) for value in values)
+        rows = self.execute_raw(
+            "SELECT Employee.EmployeeID FROM Employee "
+            "JOIN Rank ON Employee.RankID = Rank.ROWID "
+            "JOIN District ON Employee.DistrictID = District.ROWID "
+            "WHERE District.DistrictID IN ({0}) "
+            "AND Rank.Hierarchy <= 3 AND Rank.Active = 1 "
+            "ORDER BY Employee.EmployeeID".format(literals)
+        )
+        return sorted(int(row["EmployeeID"]) for row in rows)
+
+    def unit_rowids_for_business_ids(self, unit_ids):
+        values = tuple(int(value) for value in unit_ids)
+        if not values:
+            return []
+        literals = ", ".join(str(value) for value in values)
+        rows = self.execute_raw(
+            "SELECT Unit.ROWID FROM Unit WHERE Unit.UnitID IN ({0})".format(literals)
+        )
+        return [int(row["ROWID"]) for row in rows]
+
     def lookup(self, table, column):
         rows = self.execute_raw(
             "SELECT {0}.{1} FROM {0}".format(table, column)
@@ -199,9 +267,11 @@ class ZcqlDB(object):
         # key (Rank.RankID). Employee.RankID stores Rank's ROWID here too,
         # matching SqliteDB's join above (both remapped consistently).
         rows = self.execute_raw(
-            "SELECT Employee.EmployeeID, Employee.UnitID, Employee.DistrictID, "
+            "SELECT Employee.EmployeeID, Unit.UnitID, District.DistrictID, "
             "Rank.Hierarchy FROM Employee "
             "LEFT JOIN Rank ON Employee.RankID = Rank.ROWID "
+            "LEFT JOIN Unit ON Employee.UnitID = Unit.ROWID "
+            "LEFT JOIN District ON Employee.DistrictID = District.ROWID "
             "WHERE Employee.EmployeeID = {0}".format(int(employee_id))
         )
         if not rows:

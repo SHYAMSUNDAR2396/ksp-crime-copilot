@@ -31,6 +31,7 @@ class TaskContext:
     access_context: object
     resource_scope: Mapping[str, Optional[Tuple[int, ...]]]
     selected_agents: Tuple[str, ...]
+    execution_groups: Tuple[Tuple[str, ...], ...]
     deadline: Optional[dt.datetime]
     retry_budget: int
     required_agents: Tuple[str, ...]
@@ -125,6 +126,26 @@ REQUIRED_AGENTS = {
 }
 
 
+def _execution_groups(task_type, selected_agents):
+    """Return parallel specialist groups followed by composition.
+
+    Independent evidence producers share a group and may be dispatched by a
+    Catalyst Function fan-out or Circuit. Composition is deliberately isolated
+    in the final group so it can only receive verified merged evidence.
+    """
+    selected = set(selected_agents)
+    specialists = tuple(
+        name for name in _task_agents(task_type)
+        if name != "Composition Agent" and name in selected
+    )
+    groups = []
+    if specialists:
+        groups.append(specialists)
+    if "Composition Agent" in selected:
+        groups.append(("Composition Agent",))
+    return tuple(groups)
+
+
 def _task_agents(task_type):
     return TASK_AGENT_ORDER.get(task_type, TASK_AGENT_ORDER["structured_query"])
 
@@ -171,6 +192,7 @@ def build_task_context(
         access_context=access_context,
         resource_scope=scope,
         selected_agents=selected,
+        execution_groups=_execution_groups(task_type, selected),
         deadline=deadline,
         retry_budget=retry_budget,
         required_agents=REQUIRED_AGENTS.get(task_type, ("Structured Query Agent",)),

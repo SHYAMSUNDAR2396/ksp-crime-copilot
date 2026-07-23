@@ -6,7 +6,7 @@
 
 **Architecture:** A schema catalog module is the single source of truth, mechanically checked against `Police_FIR_ER_Diagram.md` so no invented table or column can survive a test run. A user's question is turned into SQL by an LLM, then that SQL is *parsed* (not string-matched) and rejected unless it stays inside a deliberately narrow, ZCQL-portable subset: SELECT-only, allowlisted tables/columns/functions, no subqueries, anchored on `CaseMaster`. Only after the SQL passes validation does the RBAC layer rewrite it — injecting a `PoliceStationID IN (...)` scope derived from the caller's rank — and only then does it execute. Answers are composed by the LLM from the returned rows, and any `CrimeNo` in the answer text that is not present in those rows is treated as a hallucination and stripped.
 
-**Tech Stack:** Python 3.9 (Zoho Catalyst function runtime), `sqlglot` for SQL parsing/rewriting, SQLite for local development and tests, Catalyst Data Store + ZCQL in production, QuickML LLM Serving (Qwen 2.5-14B) for SQL generation and answer composition, Zia for Kannada translation, `pytest` for tests.
+**Tech Stack:** Python 3.9 (Zoho Catalyst function runtime), `sqlglot` for SQL parsing/rewriting, SQLite for local development and tests, Catalyst Data Store + ZCQL in production, Catalyst QuickML GLM-4.7-Flash for SQL generation and answer composition, Zia for Kannada translation, `pytest` for tests.
 
 ## Global Constraints
 
@@ -2426,7 +2426,7 @@ git commit -m "feat: schema- and lookup-grounded NL to SQL prompt"
 
 ### Task 8: LLM client
 
-Two implementations of one method. `FakeLLM` hands back a scripted list of responses and records the prompts it saw — every test above `agent.py` uses it, so no test ever touches the network. `QuickMLLLM` posts to the QuickML LLM Serving endpoint (Qwen 2.5-14B) and strips the markdown fence that instruction-tuned models add even when told not to.
+Two implementations of one method. `FakeLLM` hands back a scripted list of responses and records the prompts it saw — every test above `agent.py` uses it, so no test ever touches the network. `QuickMLLLM` posts to the Catalyst QuickML GLM-4.7-Flash endpoint and strips the model's reasoning trace and markdown fence before validation.
 
 **Files:**
 - Create: `functions/crime_query/llm.py`
@@ -2523,7 +2523,7 @@ class FakeLLM(object):
 
 
 class QuickMLLLM(object):
-    """Qwen 2.5-14B served by Catalyst QuickML LLM Serving."""
+    """GLM-4.7-Flash served by Catalyst QuickML LLM Serving."""
 
     def __init__(self, endpoint, api_key, timeout=30):
         self._endpoint = endpoint

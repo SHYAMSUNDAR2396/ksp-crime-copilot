@@ -132,3 +132,27 @@ def test_merge_bundles_records_conflicting_claims_without_averaging_them():
 
     assert merged.claims == ()
     assert any("Conflicting claims" in limitation for limitation in merged.limitations)
+
+
+def test_merge_bundles_removes_claims_with_unauthorized_crime_numbers():
+    bundle = EvidenceBundle(
+        agent_name="Graph Agent",
+        status="ok",
+        claims=(
+            "Case 111111111111111111 is linked.",
+            "Case 999999999999999999 is linked.",
+        ),
+        rows_or_entities=({"CrimeNo": "111111111111111111"},),
+        citations=("111111111111111111",),
+        evidence_signals=("graph",),
+        confidence=1.0,
+        limitations=(),
+        index_or_model_version="graph-v1",
+        elapsed_ms=1,
+    )
+
+    merged = merge_bundles((bundle,))
+
+    assert merged.claims == ("Case 111111111111111111 is linked.",)
+    assert "999999999999999999" not in " ".join(merged.claims)
+    assert any("Unsupported case references" in limitation for limitation in merged.limitations)

@@ -47,10 +47,29 @@ CREATE TABLE IF NOT EXISTS SilentMatchRun (
   FinishedAt TEXT
 );
 CREATE TABLE IF NOT EXISTS MoEmbeddingRecord (
-  CaseMasterID INTEGER PRIMARY KEY,
+  EmbeddingID INTEGER PRIMARY KEY AUTOINCREMENT,
+  CaseMasterID INTEGER NOT NULL,
   CrimeNo TEXT NOT NULL,
   IndexVersion TEXT NOT NULL,
   Provider TEXT NOT NULL,
   VectorJSON TEXT NOT NULL,
-  UpdatedAt TEXT NOT NULL
+  UpdatedAt TEXT NOT NULL,
+  Status TEXT NOT NULL DEFAULT 'indexed',
+  FailureCount INTEGER NOT NULL DEFAULT 0,
+  LastError TEXT NOT NULL DEFAULT '',
+  UNIQUE (CaseMasterID, IndexVersion)
 );
+CREATE INDEX idx_MoEmbeddingRecord_CaseVersion
+  ON MoEmbeddingRecord (CaseMasterID, IndexVersion);
+CREATE TABLE IF NOT EXISTS MoEmbeddingJobState (
+  StateID INTEGER PRIMARY KEY AUTOINCREMENT,
+  CaseMasterID INTEGER NOT NULL,
+  IndexVersion TEXT NOT NULL,
+  Status TEXT NOT NULL,
+  FailureCount INTEGER NOT NULL DEFAULT 0,
+  UpdatedAt TEXT NOT NULL,
+  LastError TEXT NOT NULL DEFAULT '',
+  UNIQUE (CaseMasterID, IndexVersion)
+);
+CREATE INDEX idx_MoEmbeddingJobState_Version
+  ON MoEmbeddingJobState (IndexVersion, Status);

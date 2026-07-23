@@ -10,6 +10,7 @@ class ConversationTurn:
     transcript: str
     language: str
     citations: Tuple[str, ...] = ()
+    answer: str = ""
 
 
 @dataclass(frozen=True)
@@ -21,10 +22,20 @@ class ConversationState:
     turns: Tuple[ConversationTurn, ...] = ()
 
 
+class ConversationStoreError(Exception):
+    """Cache failure or malformed persisted session state."""
+
+
 class InMemoryConversationStore:
     """Deterministic local adapter; production can replace storage with Cache."""
 
     def __init__(self, max_turns=20):
+        try:
+            max_turns = int(max_turns)
+        except (TypeError, ValueError):
+            raise ValueError("max_turns must be an integer")
+        if max_turns < 1:
+            raise ValueError("max_turns must be positive")
         self.max_turns = max_turns
         self._states = {}
 
@@ -65,26 +76,35 @@ class CatalystCacheConversationStore(InMemoryConversationStore):
 
     def load(self, session_id, employee_id):
         key = self._key(session_id, employee_id)
-        raw = (
-            self.cache.get_value(key)
-            if hasattr(self.cache, "get_value")
-            else self.cache.get(key)
-        )
+        try:
+            raw = (
+                self.cache.get_value(key)
+                if hasattr(self.cache, "get_value")
+                else self.cache.get(key)
+            )
+        except Exception as exc:
+            raise ConversationStoreError("conversation cache is unavailable") from exc
         if not raw:
             return ConversationState(session_id, int(employee_id))
         import json
-        data = json.loads(raw) if isinstance(raw, str) else raw
-        turns = tuple(
-            ConversationTurn(
-                turn["turn_id"], turn["input_mode"], turn["transcript"],
-                turn["language"], tuple(turn.get("citations", ())),
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(data, dict):
+                raise ValueError("session state must be an object")
+            turns = tuple(
+                ConversationTurn(
+                    turn["turn_id"], turn["input_mode"], turn["transcript"],
+                    turn["language"], tuple(turn.get("citations", ())),
+                    turn.get("answer", ""),
+                )
+                for turn in data.get("turns", ())
+            )[-self.max_turns:]
+            return ConversationState(
+                session_id, int(employee_id), dict(data.get("filters", {})),
+                dict(data.get("prior_task", {})), turns,
             )
-            for turn in data.get("turns", ())
-        )
-        return ConversationState(
-            session_id, int(employee_id), dict(data.get("filters", {})),
-            dict(data.get("prior_task", {})), turns,
-        )
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ConversationStoreError("conversation cache state is invalid") from exc
 
     def save(self, state):
         import json
@@ -94,15 +114,18 @@ class CatalystCacheConversationStore(InMemoryConversationStore):
             "turns": [
                 {"turn_id": turn.turn_id, "input_mode": turn.input_mode,
                  "transcript": turn.transcript, "language": turn.language,
-                 "citations": list(turn.citations)}
+                 "citations": list(turn.citations), "answer": turn.answer}
                 for turn in state.turns
             ],
         }
         key = self._key(state.session_id, state.employee_id)
-        if hasattr(self.cache, "put"):
-            self.cache.put(key, json.dumps(payload))
-        else:
-            self.cache.set(key, json.dumps(payload))
+        try:
+            if hasattr(self.cache, "put"):
+                self.cache.put(key, json.dumps(payload))
+            else:
+                self.cache.set(key, json.dumps(payload))
+        except Exception as exc:
+            raise ConversationStoreError("conversation cache is unavailable") from exc
         return state
 
 

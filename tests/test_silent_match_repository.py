@@ -35,6 +35,25 @@ def test_repository_deduplicates_unordered_pairs_and_preserves_dispositions(tmp_
     db.close()
 
 
+def test_repository_canonicalizes_crime_numbers_with_unordered_case_pairs(tmp_path):
+    path = tmp_path / "canonical.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(catalog.sqlite_ddl())
+    conn.commit(); conn.close()
+    db = db_module.SqliteDB(str(path))
+    repo = SilentMatchRepository(db)
+    lower, higher = _case(1, "Ravi Kumar", 1), _case(2, "Ravi K", 2)
+    score = score_candidate(higher, lower)
+
+    alert = repo.upsert_alert(score, higher, lower, "run-1", "now")
+
+    assert alert["AnchorCaseID"] == 1
+    assert alert["MatchedCaseID"] == 2
+    assert alert["AnchorCrimeNo"] == lower["CrimeNo"]
+    assert alert["MatchedCrimeNo"] == higher["CrimeNo"]
+    db.close()
+
+
 def test_operational_tables_are_fixed_reads_not_nl_catalog():
     assert "SilentMatchAlert" in catalog.OPERATIONAL_TABLES
     assert "SilentMatchAlert" not in catalog.TABLES
@@ -69,3 +88,20 @@ def test_run_and_recipient_records_are_idempotent(tmp_path):
     repo.ensure_recipient(3, 9)
     repo.ensure_recipient(3, 9)
     assert len(db.execute_raw('SELECT * FROM "SilentMatchRecipient"')) == 1
+
+
+def test_review_action_transitions_alert_to_reviewing(tmp_path):
+    path = tmp_path / "review.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(catalog.sqlite_ddl())
+    conn.commit(); conn.close()
+    db = db_module.SqliteDB(str(path))
+    repo = SilentMatchRepository(db)
+    score = score_candidate(_case(1, "Ravi Kumar", 1), _case(2, "Ravi K", 2))
+    alert = repo.upsert_alert(score, _case(1, "Ravi Kumar", 1), _case(2, "Ravi K", 2), "run-1", "now")
+
+    updated = repo.append_action(alert["AlertID"], "review", "", 9, "later")
+
+    assert updated["Status"] == "Reviewing"
+    assert repo.actions_for(alert["AlertID"])[-1]["ActionType"] == "review"
+    db.close()

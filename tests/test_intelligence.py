@@ -1,6 +1,7 @@
 import pytest
 
 from functions.crime_query.access import AccessContext, AccessPolicyError
+from functions.crime_query.graph import DerivedEdge
 from functions.crime_query.intelligence import analytics_view, network_view
 
 
@@ -29,7 +30,20 @@ def test_network_view_is_cited_and_capability_gated():
         network_view(context(()), "case:1", cases())
 
 
+def test_network_view_accepts_active_persisted_projection():
+    edges = (
+        DerivedEdge("near", "case:1", "case:2", 0.9, ("FIR/1", "FIR/2")),
+    )
+    result = network_view(
+        context(("view_graph",)), "case:1", cases(), hops=1,
+        derived_edges=edges,
+    )
+    assert result["citations"] == ("FIR/1", "FIR/2")
+    assert result["metrics"]["degree"]["case:1"] == 1
+
+
 def test_analytics_view_returns_aggregate_warning():
     result = analytics_view(context(("query_structured_cases",)), cases())
     assert "warning" in result
+    assert "prevention" in result
     assert all("FIR/" in citation for citation in result["citations"])

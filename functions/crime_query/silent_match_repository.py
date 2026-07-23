@@ -23,6 +23,12 @@ class SilentMatchRepository:
 
     def upsert_alert(self, score, anchor, candidate, run_id, now):
         first, second = sorted((int(anchor["CaseMasterID"]), int(candidate["CaseMasterID"])))
+        cases_by_id = {
+            int(anchor["CaseMasterID"]): anchor,
+            int(candidate["CaseMasterID"]): candidate,
+        }
+        first_case = cases_by_id[first]
+        second_case = cases_by_id[second]
         existing = self._read(
             "SilentMatchAlert",
             {"AlertType": score.alert_type, "AnchorCaseID": first, "MatchedCaseID": second},
@@ -32,6 +38,7 @@ class SilentMatchRepository:
         evidence = json.dumps(dict(score.evidence), sort_keys=True)
         if existing:
             row = existing[0]
+            index_version = score.index_version or row.get("IndexVersion", "")
             self.append_action(
                 row["AlertID"], "evidence_updated", "evidence re-evaluated", 0, now,
                 previous_score=row["Score"],
@@ -42,24 +49,29 @@ class SilentMatchRepository:
                 "SilentMatchAlert", row["AlertID"],
                 {"Score": score.score, "ConfidenceBand": score.confidence_band,
                  "EvidenceJSON": evidence, "EvidenceSnapshotJSON": evidence,
-                 "SourceRunID": run_id, "UpdatedAt": now},
+                 "SourceRunID": run_id, "IndexVersion": index_version,
+                 "UpdatedAt": now},
                 'UPDATE "SilentMatchAlert" SET Score = ?, ConfidenceBand = ?, EvidenceJSON = ?, '
-                'EvidenceSnapshotJSON = ?, SourceRunID = ?, UpdatedAt = ? WHERE AlertID = ?',
-                (score.score, score.confidence_band, evidence, evidence, run_id, now, row["AlertID"]),
+                'EvidenceSnapshotJSON = ?, SourceRunID = ?, IndexVersion = ?, '
+                'UpdatedAt = ? WHERE AlertID = ?',
+                (score.score, score.confidence_band, evidence, evidence, run_id,
+                 index_version, now, row["AlertID"]),
             )
             return self.get_alert(row["AlertID"])
         alert_id = self._insert(
             "SilentMatchAlert",
             {"AlertType": score.alert_type, "AnchorCaseID": first, "MatchedCaseID": second,
-             "AnchorCrimeNo": anchor["CrimeNo"], "MatchedCrimeNo": candidate["CrimeNo"],
+             "AnchorCrimeNo": first_case["CrimeNo"], "MatchedCrimeNo": second_case["CrimeNo"],
              "Score": score.score, "ConfidenceBand": score.confidence_band, "Status": "New",
              "EvidenceJSON": evidence, "EvidenceSnapshotJSON": evidence,
-             "SourceRunID": run_id, "CreatedAt": now, "UpdatedAt": now},
+             "SourceRunID": run_id, "IndexVersion": score.index_version,
+             "CreatedAt": now, "UpdatedAt": now},
             'INSERT INTO "SilentMatchAlert" '
-            '(AlertType, AnchorCaseID, MatchedCaseID, AnchorCrimeNo, MatchedCrimeNo, Score, ConfidenceBand, Status, EvidenceJSON, EvidenceSnapshotJSON, SourceRunID, CreatedAt, UpdatedAt) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (score.alert_type, first, second, anchor["CrimeNo"], candidate["CrimeNo"], score.score,
-             score.confidence_band, "New", evidence, evidence, run_id, now, now),
+            '(AlertType, AnchorCaseID, MatchedCaseID, AnchorCrimeNo, MatchedCrimeNo, Score, ConfidenceBand, Status, EvidenceJSON, EvidenceSnapshotJSON, SourceRunID, IndexVersion, CreatedAt, UpdatedAt) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (score.alert_type, first, second, first_case["CrimeNo"], second_case["CrimeNo"], score.score,
+             score.confidence_band, "New", evidence, evidence, run_id,
+             score.index_version, now, now),
         )
         return self.get_alert(alert_id)
 
@@ -79,14 +91,15 @@ class SilentMatchRepository:
             (alert_id, action, note, employee_id, now, previous_score,
              previous_band, evidence_snapshot),
         )
-        if action in ("Seen", "Linked", "Dismissed"):
+        if action in ("review", "Seen", "Linked", "Dismissed"):
             current = self.get_alert(alert_id)
             if current and current["Status"] not in ("Linked", "Dismissed"):
+                status = "Reviewing" if action == "review" else action
                 self._update(
                     "SilentMatchAlert", alert_id,
-                    {"Status": action, "UpdatedAt": now},
+                    {"Status": status, "UpdatedAt": now},
                     'UPDATE "SilentMatchAlert" SET Status = ?, UpdatedAt = ? WHERE AlertID = ?',
-                    (action, now, alert_id),
+                    (status, now, alert_id),
                 )
         return self.get_alert(alert_id)
 
@@ -138,3 +151,9 @@ class SilentMatchRepository:
     def get_alert(self, alert_id):
         rows = self._read("SilentMatchAlert", {"ROWID": alert_id})
         return rows[0] if rows else None
+
+    def recipients_for(self, alert_id):
+        return self._read("SilentMatchRecipient", {"AlertID": int(alert_id)})
+
+    def actions_for(self, alert_id):
+        return self._read("SilentMatchAction", {"AlertID": int(alert_id)})

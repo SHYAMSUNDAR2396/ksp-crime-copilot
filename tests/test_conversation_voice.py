@@ -2,6 +2,7 @@ import pytest
 
 from functions.crime_query.conversation import (
     CatalystCacheConversationStore,
+    ConversationStoreError,
     ConversationTurn,
     InMemoryConversationStore,
     merge_follow_up,
@@ -77,3 +78,13 @@ def test_cache_store_supports_catalyst_segment_shape():
     store = CatalystCacheConversationStore(Cache())
     store.append("s2", 9, ConversationTurn(2, "voice", "hello", "en"))
     assert store.load("s2", 9).turns[0].turn_id == 2
+
+
+def test_cache_store_redacts_provider_failures_as_store_errors():
+    class BrokenCache:
+        def get(self, key):
+            raise RuntimeError("provider endpoint and token must not escape")
+
+    store = CatalystCacheConversationStore(BrokenCache())
+    with pytest.raises(ConversationStoreError, match="cache is unavailable"):
+        store.load("s3", 9)

@@ -33,6 +33,19 @@ def test_units_in_district(db):
     assert db.units_in_district(3) == [9, 10, 11, 12]
 
 
+def test_command_employee_ids_use_active_command_ranks_in_districts(db):
+    rows = db.execute_raw(
+        'SELECT Employee.EmployeeID FROM "Employee" '
+        'JOIN "Rank" ON Employee.RankID = Rank.rowid '
+        'JOIN "District" ON Employee.DistrictID = District.rowid '
+        'WHERE District.DistrictID IN (1, 3) '
+        'AND Rank.Hierarchy <= 3 AND Rank.Active = 1 '
+        'ORDER BY Employee.EmployeeID'
+    )
+    assert db.command_employee_ids([1, 3]) == [row["EmployeeID"] for row in rows]
+    assert db.command_employee_ids([]) == []
+
+
 def test_lookup_returns_distinct_sorted_values(db):
     heads = db.lookup("CrimeSubHead", "CrimeHeadName")
     assert "Two-Wheeler Theft" in heads
@@ -46,6 +59,10 @@ def test_caller_for_reads_rank_hierarchy_from_schema(db):
     assert caller.unit_id == 1
     assert caller.district_id == 1
     assert caller.rank_hierarchy == 4  # Inspector, seeded first in every unit
+
+
+def test_unit_rowids_are_translated_from_business_ids(db):
+    assert db.unit_rowids_for_business_ids([1, 4]) == [1, 4]
 
 
 def test_caller_for_unknown_employee_is_none(db):

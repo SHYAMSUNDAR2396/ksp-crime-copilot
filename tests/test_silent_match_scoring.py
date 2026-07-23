@@ -45,3 +45,21 @@ def test_score_bands_and_semantic_contribution_are_bounded():
     )
     assert result.confidence_band in ("Medium", "High")
     assert sum(value for key, value in result.evidence if key == "mo_similarity") <= 10
+
+
+def test_semantic_index_version_is_preserved_in_score_evidence():
+    result = score_candidate(
+        _case(1, "Ravi Kumar"), _case(2, "Ravi K"),
+        semantic_signal={"similarity": 0.9, "index_version": "mo-v2"},
+    )
+    assert result.index_version == "mo-v2"
+
+
+def test_later_accused_profile_can_supply_identity_evidence():
+    anchor = _case(1, "Anitha Kumar")
+    candidate = _case(2, "Lakshmi Bhat", unit=2)
+    anchor["AccusedProfiles"] = (("Anitha Kumar", "32", "1"), ("Ravi Kumar", "31", "1"))
+    candidate["AccusedProfiles"] = (("Lakshmi Bhat", "54", "2"), ("Ravi K", "31", "1"))
+    result = score_candidate(anchor, candidate)
+    assert result.alert_type == "possible_same_person"
+    assert result.persistable is True

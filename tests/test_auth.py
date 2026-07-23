@@ -1,0 +1,42 @@
+from functions.crime_query.auth import authenticated_employee_id, employee_id_from_user
+
+
+def test_explicit_identity_mapping_returns_employee_id():
+    user = {"user_id": "catalyst-42", "email_id": "officer@example.test"}
+    assert employee_id_from_user(user, {"catalyst-42": 9}) == 9
+
+
+def test_unmapped_authenticated_user_is_rejected():
+    user = {"user_id": "catalyst-42", "email_id": "officer@example.test"}
+    assert employee_id_from_user(user, {}) is None
+
+
+def test_client_employee_id_is_not_an_identity_source():
+    user = {"user_id": "catalyst-42"}
+    assert employee_id_from_user(user, {"client-payload": 97}) is None
+
+
+def test_authenticated_principal_is_checked_against_employee_scope(monkeypatch):
+    class Authentication:
+        def get_current_user(self):
+            return {"user_id": "catalyst-42"}
+
+    class App:
+        def authentication(self):
+            return Authentication()
+
+    monkeypatch.setenv("KSP_AUTH_EMPLOYEE_MAP", '{"catalyst-42": 9}')
+    assert authenticated_employee_id(App(), lambda employee_id: object()) == 9
+
+
+def test_unknown_authenticated_principal_fails_closed(monkeypatch):
+    class Authentication:
+        def get_current_user(self):
+            return {"user_id": "catalyst-42"}
+
+    class App:
+        def authentication(self):
+            return Authentication()
+
+    monkeypatch.setenv("KSP_AUTH_EMPLOYEE_MAP", '{"catalyst-42": 9}')
+    assert authenticated_employee_id(App(), lambda employee_id: None) is None

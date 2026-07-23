@@ -29,8 +29,9 @@ class SqliteMoIndex:
                 raise ValueError("zero vector cannot be indexed")
             self.db.execute_write(
                 'INSERT INTO "MoEmbeddingRecord" (CaseMasterID, CrimeNo, IndexVersion, Provider, VectorJSON, UpdatedAt) '
-                'VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(CaseMasterID) DO UPDATE SET CrimeNo=excluded.CrimeNo, '
-                'IndexVersion=excluded.IndexVersion, Provider=excluded.Provider, VectorJSON=excluded.VectorJSON, UpdatedAt=excluded.UpdatedAt',
+                'VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(CaseMasterID, IndexVersion) DO UPDATE SET CrimeNo=excluded.CrimeNo, '
+                'IndexVersion=excluded.IndexVersion, Provider=excluded.Provider, VectorJSON=excluded.VectorJSON, '
+                'UpdatedAt=excluded.UpdatedAt, Status="indexed", FailureCount=0, LastError=""',
                 (record.case_id, record.crime_no, self.index_version, record.provider,
                  json.dumps(vector), record.updated_at),
             )
@@ -51,6 +52,8 @@ class SqliteMoIndex:
 class OperationalMoIndex:
     """Catalyst Data Store persistence adapter with in-memory search inputs."""
 
+    uses_persisted_vectors = True
+
     def __init__(self, db, index_version="mo-index-v1"):
         self.db = db
         self.index_version = index_version
@@ -65,9 +68,13 @@ class OperationalMoIndex:
                 "Provider": record.provider,
                 "VectorJSON": json.dumps(vector),
                 "UpdatedAt": record.updated_at,
+                "Status": "indexed",
+                "FailureCount": 0,
+                "LastError": "",
             }
             existing = self.db.read_operational(
-                "MoEmbeddingRecord", {"CaseMasterID": record.case_id}
+                "MoEmbeddingRecord",
+                {"CaseMasterID": record.case_id, "IndexVersion": self.index_version},
             )
             if existing:
                 self.db.update_operational(
@@ -79,6 +86,28 @@ class OperationalMoIndex:
                 self.db.insert_operational("MoEmbeddingRecord", row)
 
     def search(self, query_vector, cases, limit=10, excluded_case_id=None):
+        case_by_id = {int(case["CaseMasterID"]): case for case in cases or ()}
+        rows = self.db.read_operational(
+            "MoEmbeddingRecord", {"IndexVersion": self.index_version}
+        )
+        searchable = []
+        for row in rows or ():
+            try:
+                case_id = int(row["CaseMasterID"])
+                vector = json.loads(row["VectorJSON"])
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if case_id not in case_by_id:
+                continue
+            if row.get("Status") not in (None, "", "indexed"):
+                continue
+            case = case_by_id[case_id]
+            searchable.append({
+                "case_id": case_id,
+                "crime_no": case["CrimeNo"],
+                "vector": vector,
+                "narrative": case.get("BriefFacts", ""),
+            })
         return SqliteMoIndex(None, self.index_version).search(
-            query_vector, cases, limit, excluded_case_id,
+            query_vector, searchable, limit, excluded_case_id,
         )

@@ -5,16 +5,59 @@ against `SqliteDB` and fakes. The steps below need a real Zoho Catalyst
 account/CLI, against project `crime-copilot` (function URL
 `https://crime-copilot-60075198995.development.catalystserverless.in/server/crime_query/`).
 
-**Status: Steps 1–2 done. Step 3 was blocked on a real architectural
-gap (ZCQL relationships needing Foreign Key columns pointing at a
-parent's ROWID, not its business key) — resolved offline by teaching
-the whole system one consistent rule (every join targets ROWID; see
-"Open gap: ZCQL relationships" and the "Converting the remaining
-relationships" procedure below), with the live Catalyst side converted
-relationship-by-relationship using `tools/catalyst_fk_remap.py`.**
-Confirm Step 3's three smoke-test curls actually pass before treating
-this as fully closed — see "Re-verify Step 3's smoke tests" below.
-Steps 4–5 remain open pending that confirmation.
+**Current workspace status (2026-07-23): live readiness is not verified.** The
+Catalyst CLI is not available in this workspace, the principal mapping is a
+placeholder, and the multilingual embedding/RAG endpoints are intentionally
+blank in the checked-in configuration. The historical notes below record
+earlier account observations and implementation decisions; they are not a
+substitute for rerunning the checks against the current Catalyst project.
+Run the safe local gate first:
+
+```bash
+python -m tools.catalyst_preflight
+python -m tools.catalyst_preflight --require-live
+```
+
+The second command must return exit code 0, followed by the authenticated
+deployment and smoke tests in this document, before production readiness is
+claimed.
+
+The repeatable smoke contract is available as an opt-in command. It prints
+only step names, status codes, and fixed contract results; it never prints
+tokens, URLs, response bodies, or CrimeNos:
+
+```bash
+export KSP_CRIME_QUERY_URL="https://..."
+export KSP_SILENT_MATCH_URL="https://..."
+export CATALYST_TOKEN="..."
+python -m tools.catalyst_smoke --execute --include-views --include-export
+```
+
+Use `--include-scan` and `--include-projection` only with synthetic fixtures
+because they create or update operational alert/graph state. `--include-views`
+covers the voice, narrative, network, analytics, profile, demographic, and
+audit contracts in addition to the base query/similar-case/inbox checks.
+`--include-export` additionally requires a real SmartBrowz PDF response.
+
+**Status: the implementation and deployment contract are complete locally,
+but live readiness is still unverified.** The earlier account investigation
+identified ZCQL Foreign Key/parent-`ROWID` behavior; the current code, catalog,
+prompts, fixed projections, and remapping tools consistently implement that
+rule. Re-run the authenticated smoke contract against the current Catalyst
+project before closing the live gate. Steps 4–5 also require live credentials
+and model/embedding endpoints.
+
+Before the curls, apply [`CATALYST_SECURITY.md`](CATALYST_SECURITY.md), set
+`KSP_AUTH_EMPLOYEE_MAP` in both function configurations, and authenticate the
+request. The deployed handlers discard `employee_id` from the request body;
+identity comes only from the Catalyst principal and its server-side mapping.
+
+For silent-match scans, keep `KSP_SILENT_MATCH_LOOKBACK_DAYS` explicitly set
+in `silent_match/catalyst-config.json` (default `365`). Batch anchors scan the
+requested date window while candidates are limited to that window plus the
+historical lookback; live anchors scan the same lookback ending on the anchor
+case date. This keeps retrieval bounded and makes batch/live scoring parity
+replayable.
 
 ## Query-generation contract
 
@@ -124,7 +167,7 @@ delete the stale object in the console's Stratus browser, or just copy the
 CSV under a new filename before retrying (the `--table` flag controls the
 target table independently of the uploaded filename).
 
-## 3. Deploy and smoke-test — deploy confirmed, full end-to-end blocked
+## 3. Deploy and smoke-test — live re-verification pending
 
 ```bash
 catalyst deploy --only functions:crime_query
@@ -146,6 +189,16 @@ deploy, so they must live in that file, not just the console.
 No `QUICKML_API_KEY` is needed — `main._quickml_token(app)` pulls a live,
 auto-refreshed OAuth token from `app.credential.token()` at request time.
 
+`QUICKML_MODEL` is pinned to Catalyst's `crm-di-glm47b_30b_it` deployment so
+the deprecated model cannot be selected accidentally. Conversation
+export uses `SMARTBROWZ_ENDPOINT`, the Catalyst SmartBrowz
+`/browser360/v1/project/{project_id}/convert` endpoint, and requests a PDF
+from a verified, scope-filtered HTML document. Enable the
+`ZohoCatalyst.pdfshot.EXECUTE` scope for the function. If the endpoint is not
+configured, the handler returns the safe HTML fallback for local tests; the
+deployed configuration should keep the endpoint enabled for the PLAN.md PDF
+export requirement.
+
 Three things only a live call revealed, all fixed in `functions/crime_query/llm.py`:
 1. The real response shape is `{"response": "...", "usage": {...}}`, not
    the OpenAI-style `{"choices": [...]}` the console's own sample documents.
@@ -164,29 +217,33 @@ returned syntactically correct SQL that `validate.validate()` accepts as-is
 — generation and validation both work. The blocker below is purely at
 execution time.
 
-### Basic Q&A smoke test — SQL generation confirmed, execution blocked
+### Basic Q&A smoke test — local contract verified, live execution pending
 
 Basic Q&A (constable, employee id 9 — scoped to one station):
 
 ```bash
 curl -s -X POST "$FUNCTION_URL" \
+  -H "Authorization: Zoho-oauthtoken $CATALYST_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"employee_id": 9, "question": "How many two-wheeler thefts in Bengaluru East since April 2026?"}'
+  -d '{"question": "How many two-wheeler thefts in Bengaluru East since April 2026?"}'
 ```
 
 Expected: HTTP 200, `sql` contains `PoliceStationID IN (1)`, `filter_citation` names the crime sub-head and date filter.
 
-**Currently fails at execution** with `No relationship between tables
-CrimeSubHead and CaseMaster` — this is the open architectural gap below,
-not a bug in `main.py`/`agent.py`. Don't debug further here until that's
-resolved.
+The local SQLite path executes this contract successfully. The earlier live
+account failure (`No relationship between tables CrimeSubHead and CaseMaster`)
+was caused by undeclared Catalyst relationships and is retained below as a
+historical diagnostic. Re-run this request against the current project after
+applying the FK/ROWID import procedure; do not treat local success as proof of
+live ZCQL readiness.
 
 Kannada round-trip:
 
 ```bash
 curl -s -X POST "$FUNCTION_URL" \
+  -H "Authorization: Zoho-oauthtoken $CATALYST_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"employee_id": 9, "question": "ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?"}'
+  -d '{"question": "ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?"}'
 ```
 
 Expected: `"language": "kn"`, Kannada `answer`, every string in `citations` appears verbatim (Latin digits) inside the Kannada answer text.
@@ -194,8 +251,10 @@ Expected: `"language": "kn"`, Kannada `answer`, every string in `citations` appe
 RBAC scope widening (SP, employee id 97 — district-wide):
 
 ```bash
-curl -s -X POST "$FUNCTION_URL" -H 'Content-Type: application/json' \
-  -d '{"employee_id": 97, "question": "How many cases are open?"}' | grep -o 'IN ([0-9, ]*)'
+curl -s -X POST "$FUNCTION_URL" \
+  -H "Authorization: Zoho-oauthtoken $CATALYST_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "How many cases are open?"}' | grep -o 'IN ([0-9, ]*)'
 ```
 
 Expected: `IN (1, 2, 3, 4)` — all four of the district's stations, not one.
@@ -208,10 +267,11 @@ SELECT AuditLog.Question, AuditLog.EmployeeID, AuditLog.CrimeNos FROM AuditLog
 
 Expected: one row per curl above, including any refused ones.
 
-## Open gap: ZCQL relationships need Foreign Key columns, not business keys
+## Historical ZCQL relationship investigation and current remediation
 
-**This blocks all three Step 3 smoke tests and needs a decision before
-more work goes into it — it's an architecture question, not a quick fix.**
+**This section records the original live-account failure and remediation. It is
+not current evidence that the present deployment is broken; authenticated
+smoke execution is still required to verify the current Catalyst project.**
 
 ### What's wrong
 
@@ -280,8 +340,8 @@ relationships in `catalog.FOREIGN_KEYS`. It needs one of:
    assumption that every answer is one validated SQL statement.
 3. **Live with SQLite-only correctness** for the datathon submission,
    documenting ZCQL relationship support as a known gap, and demo against
-   `SqliteDB` (fully working, 197 tests passing) rather than the live
-   Catalyst deployment.
+   `SqliteDB` (fully working under the current deterministic suite) rather
+   than the live Catalyst deployment.
 
 ### Worked example: `Employee.RankID → Rank` (the one relationship fixed so far)
 
@@ -422,7 +482,7 @@ for pair in \
   en="${pair%%|*}"; kn="${pair##*|}"
   for q in "$en" "$kn"; do
     curl -s -X POST "$FUNCTION_URL" -H 'Content-Type: application/json' \
-      -d "$(python -c 'import json,sys; print(json.dumps({"employee_id":9,"question":sys.argv[1]}))' "$q")" \
+      -d "$(python -c 'import json,sys; print(json.dumps({"question":sys.argv[1]}))' "$q")" \
       | python -c 'import json,sys; print(json.load(sys.stdin)["sql"])'
   done
 done
@@ -437,7 +497,7 @@ Extend to all 10 pairs of your choosing (mix of aggregate/filter questions acros
 invoked live.
 
 ```bash
-export QUICKML_ENDPOINT=... QUICKML_API_KEY=...
+export QUICKML_ENDPOINT=... QUICKML_TOKEN=... QUICKML_ORG_ID=...
 python -m eval.run_eval
 ```
 
@@ -447,21 +507,18 @@ headline evaluation numbers, everything before this point used `FakeLLM`.
 
 ## What "done" looks like
 
-- Data Store has 5000 `CaseMaster` rows and all 26 other tables populated. **Done.**
-- All three smoke-test curls (Step 3) return expected shapes. **Blocked** —
-  see "Open gap: ZCQL relationships" above. SQL generation and validation
-  are confirmed working; execution fails on undeclared relationships.
-- `AuditLog` has one row per request, including refusals. **Done** for the
-  cases tried so far (the probe writes, and any refused request writes too
-  since `_audit` runs on every path).
-- 10/10 (or documented fewer) Kannada/English pairs produce identical SQL. **Not started** — blocked behind Step 3.
-- `eval/run_eval.py`'s live run produces real accuracy/hallucination/latency numbers. **Not started** — blocked behind Step 3, and would currently score near 0% until the relationship gap is resolved (every query needs at least the `Employee → Rank` join to authenticate, plus whatever joins each question needs).
+- Local implementation: the complete deterministic suite, static checks, and
+  integrated module workflow pass; the exact count is reported by the latest
+  `python -m pytest -q` run rather than this historical account note.
+- Live Data Store row counts, FK/ROWID relationships, principal mapping, and
+  authenticated smoke contracts: **pending current Catalyst verification**.
+- Live 10-pair Kannada/English parity and the 30-question QuickML evaluation:
+  **pending authenticated QuickML execution**.
+- Audit, graph projection, MO index, scan, alert, and export contracts have
+  deterministic local coverage; their Catalyst persistence and provider
+  behavior still require the live smoke/runbook steps.
 
-If any step fails, the fix almost always belongs in the same module that
-step is testing (`db.py` for Step 1/3, `translate.py`/`prompt.py` for Step
-4, `llm.py` for Step 5) — not in a new workaround file. Every module here
-was built with a unit-test seam precisely so a live-environment mismatch is
-a small, targeted fix. The one exception found today is the ZCQL
-relationship gap above, which is a genuine architecture decision, not a
-seam-level fix — resolve that first via one of the three options listed
-before spending more time on Steps 3-5.
+If any live step fails, fix the smallest affected adapter (`db.py` for ZCQL,
+`translate.py`/`prompt.py` for language parity, `llm.py` for QuickML, or the
+operational repositories for Data Store persistence), then rerun the complete
+smoke contract. Do not substitute localhost results for a live gate.

@@ -91,12 +91,18 @@ def _flatten_limitations(bundles):
     return combined
 
 
-def _merge_claims(bundles, limitations):
+def _merge_claims(bundles, limitations, authorized_citations):
     claims = []
     seen = {}
 
     for bundle in bundles:
         for claim in bundle.claims:
+            mentioned = set(CRIMENO_RE.findall(str(claim)))
+            if not mentioned.issubset(set(authorized_citations)):
+                message = "Unsupported case references were removed from evidence."
+                if message not in limitations:
+                    limitations.append(message)
+                continue
             normalized = " ".join(claim.lower().split())
             negative = " not " in " {0} ".format(normalized) or normalized.startswith("not ")
             key = normalized.replace(" not ", " ").replace("not ", "")
@@ -200,7 +206,7 @@ def merge_bundles(bundles):
         if message not in limitations:
             limitations.append(message)
 
-    claims = _merge_claims(valid, limitations)
+    claims = _merge_claims(valid, limitations, authorized)
     return EvidenceBundle(
         agent_name="Merged Evidence",
         status="ok",

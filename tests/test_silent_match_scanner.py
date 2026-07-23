@@ -14,6 +14,15 @@ class Matcher:
         return []
 
 
+class CapturingMatcher(Matcher):
+    def __init__(self):
+        self.candidates = None
+
+    def similar_cases(self, source, candidates, caller, limit=10):
+        self.candidates = list(candidates)
+        return []
+
+
 class Repository:
     def __init__(self):
         self.rows = []
@@ -46,6 +55,19 @@ class Repository:
             self.recipients.append((alert_id, employee_id))
 
 
+class FlakyRecipientRepository(Repository):
+    def __init__(self, failures_before_success):
+        super().__init__()
+        self.failures_before_success = failures_before_success
+        self.recipient_attempts = 0
+
+    def ensure_recipient(self, alert_id, employee_id):
+        self.recipient_attempts += 1
+        if self.recipient_attempts <= self.failures_before_success:
+            raise RuntimeError("provider-specific recipient failure")
+        return super().ensure_recipient(alert_id, employee_id)
+
+
 def case(case_id, name, station):
     return {"CaseMasterID": case_id, "CrimeNo": "FIR/{}".format(case_id),
             "AccusedName": name, "CrimeSubHeadID": 1, "SectionCodes": ["379"],
@@ -73,3 +95,41 @@ def test_live_incomplete_anchor_is_skipped():
     scanner = SilentMatchScanner(Loader(anchor, [case(2, "Ravi Kumar", 2)]), Matcher(), Repository())
     result = scanner.scan(anchor_case_id=1, trigger_source="live")
     assert result.skipped_cases[0]["reason"] == "pending_enrichment"
+
+
+def test_scanner_filters_out_of_scope_pairs_before_matching():
+    anchor = case(1, "Ravi Kumar", 1)
+    candidates = [case(2, "Ravi Kumar", 2), case(3, "Ravi Kumar", 3)]
+    matcher = CapturingMatcher()
+    scanner = SilentMatchScanner(
+        Loader(anchor, candidates), matcher, Repository(),
+        pair_authorizer=lambda left, right: int(right["CaseMasterID"]) != 3,
+    )
+    scanner.scan(anchor_case_id=1, trigger_source="live")
+    assert [row["CaseMasterID"] for row in matcher.candidates] == [2]
+
+
+def test_recipient_delivery_retries_without_losing_durable_alert():
+    repo = FlakyRecipientRepository(failures_before_success=1)
+    scanner = SilentMatchScanner(
+        Loader(case(1, "Ravi Kumar", 1), [case(2, "Ravi Kumar", 2)]),
+        Matcher(), repo, recipient_router=lambda left, right: (9,),
+        recipient_retry_attempts=2,
+    )
+    result = scanner.scan(anchor_case_id=1, trigger_source="live")
+    assert result.failures == ()
+    assert repo.rows and repo.recipients == [(1, 9)]
+    assert repo.recipient_attempts == 2
+
+
+def test_recipient_delivery_failure_is_bounded_and_sanitized():
+    repo = FlakyRecipientRepository(failures_before_success=9)
+    scanner = SilentMatchScanner(
+        Loader(case(1, "Ravi Kumar", 1), [case(2, "Ravi Kumar", 2)]),
+        Matcher(), repo, recipient_router=lambda left, right: (9,),
+        recipient_retry_attempts=2,
+    )
+    result = scanner.scan(anchor_case_id=1, trigger_source="live")
+    assert repo.rows
+    assert repo.recipient_attempts == 2
+    assert result.failures == ("recipient delivery failed",)

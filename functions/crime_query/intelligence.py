@@ -3,11 +3,11 @@ from dataclasses import asdict
 
 try:
     from .access import require_capability
-    from .analytics import dbscan_hotspots, early_warning, trend_rollup
+    from .analytics import dbscan_hotspots, early_warning, prevention_brief, trend_rollup
     from .graph import build_derived_edges, network_metrics, traverse
 except ImportError:  # pragma: no cover
     from access import require_capability
-    from analytics import dbscan_hotspots, early_warning, trend_rollup
+    from analytics import dbscan_hotspots, early_warning, prevention_brief, trend_rollup
     from graph import build_derived_edges, network_metrics, traverse
 
 
@@ -24,9 +24,17 @@ def _case_visible(context, case_rows, case_id):
     )
 
 
-def network_view(context, start_node, cases, accused_rows=(), arrest_rows=(), section_rows=(), hops=2):
+def network_view(context, start_node, cases, accused_rows=(), arrest_rows=(), section_rows=(), hops=2,
+                 derived_edges=None):
     require_capability(context, "view_graph")
-    nodes, edges = build_derived_edges(cases, accused_rows, arrest_rows, section_rows)
+    if derived_edges is None:
+        nodes, edges = build_derived_edges(cases, accused_rows, arrest_rows, section_rows)
+    else:
+        edges = tuple(derived_edges)
+        nodes = tuple(sorted({
+            node for edge in edges
+            for node in (edge.source, edge.target)
+        }))
 
     def visible(edge):
         case_ids = []
@@ -57,10 +65,12 @@ def analytics_view(context, cases, threshold_ratio=1.25):
     trends = trend_rollup(visible)
     hotspots = dbscan_hotspots(visible)
     counts = [point.count for point in trends]
+    warning = early_warning(counts, threshold_ratio=threshold_ratio)
     return {
         "trends": tuple(asdict(point) for point in trends),
         "hotspots": tuple(asdict(hotspot) for hotspot in hotspots),
-        "warning": early_warning(counts, threshold_ratio=threshold_ratio),
+        "warning": warning,
+        "prevention": prevention_brief(warning, hotspots),
         "citations": tuple(sorted({
             citation for point in trends for citation in point.citations
         })),

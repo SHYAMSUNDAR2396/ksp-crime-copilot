@@ -38,8 +38,14 @@ def allowed_units(caller, db):
     if caller.rank_hierarchy <= STATEWIDE_MAX_HIERARCHY:
         return None
     if caller.rank_hierarchy <= DISTRICT_MAX_HIERARCHY:
-        return db.units_in_district(caller.district_id)
-    return [caller.unit_id]
+        business_units = db.units_in_district(caller.district_id)
+    else:
+        business_units = [caller.unit_id]
+    # Catalyst FK columns store parent ROWIDs. Fixed application views expose
+    # business identifiers, but the generated CaseMaster scope predicate is
+    # applied to CaseMaster.PoliceStationID itself, so translate here.
+    mapper = getattr(db, "unit_rowids_for_business_ids", None)
+    return mapper(business_units) if mapper is not None else business_units
 
 
 def _projection_column_nodes(select):

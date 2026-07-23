@@ -42,6 +42,30 @@ class Answer:
     policy_code: str = ""
 
 
+@dataclass
+class PreparedQuery:
+    """Validated, RBAC-scoped evidence waiting for composition."""
+
+    question: str
+    caller: object
+    db: object
+    llm: object
+    generated_sql: str
+    executed_sql: str
+    rows: list
+    citations: list
+    filter_citation: str
+    now: dt.datetime
+
+
+class PreparationError(Exception):
+    """Safe structured-query preparation failure with generated SQL attached."""
+
+    def __init__(self, reason, generated=""):
+        super().__init__(reason)
+        self.generated = generated
+
+
 def crime_numbers(rows):
     """Every 18-digit crime number present in the result rows, in row order."""
     found = []
@@ -133,50 +157,83 @@ def _refuse(db, caller, question, generated, reason, now):
     )
 
 
-def answer(question, caller, db, llm, today, now=None):
+def prepare_query(question, caller, db, llm, today, now=None):
+    """Generate, validate, scope, execute, and redact without composing.
+
+    This is the Structured Query Agent boundary. Keeping composition separate
+    lets the supervisor merge typed evidence before any answer-generation call.
+    """
     now = now or dt.datetime.now(dt.timezone.utc)
     generated = ""
-
     try:
         select, generated = _generate_sql(question, caller, db, llm, today)
     except (validate.ValidationError, LLMError, DBError) as err:
-        # DBError belongs here too: build_prompt reads lookup values from the DB.
-        generated = getattr(err, "sql", generated)
-        return _refuse(db, caller, question, generated, str(err), now)
+        raise PreparationError(str(err), getattr(err, "sql", generated))
 
     try:
         units = rbac.allowed_units(caller, db)
         executed_sql, redact_keys = rbac.apply(select, caller, units)
     except rbac.RbacError as err:
-        return _refuse(db, caller, question, generated, str(err), now)
+        raise PreparationError(str(err), generated)
 
     try:
         rows = db.execute(executed_sql)
     except DBError as err:
-        return _refuse(db, caller, question, generated, str(err), now)
+        raise PreparationError(str(err), generated)
 
     rows = rbac.redact_rows(rows, redact_keys)
     allowed = crime_numbers(rows)
-
-    try:
-        composed = llm.complete(prompt_module.build_answer_prompt(question, rows, executed_sql))
-    except LLMError as err:
-        return _refuse(db, caller, question, generated, str(err), now)
-
-    text, _mentioned, hallucinated = verify_citations(composed, allowed)
-    filter_citation = _filter_citation(executed_sql) if not allowed else ""
-
-    # Citations are the crime numbers the *rows* contain, not the ones the model
-    # chose to mention. A model that answers "three cases were found" without
-    # listing them still produces a fully citable answer.
-    audit_ok = _audit(db, caller, question, generated, executed_sql, allowed, rows, now)
-
-    return Answer(
-        text=text,
-        sql=executed_sql,
+    return PreparedQuery(
+        question=question,
+        caller=caller,
+        db=db,
+        llm=llm,
+        generated_sql=generated,
+        executed_sql=executed_sql,
         rows=rows,
         citations=allowed,
-        filter_citation=filter_citation,
+        filter_citation=_filter_citation(executed_sql) if not allowed else "",
+        now=now,
+    )
+
+
+def compose_prepared(prepared):
+    """Compose and citation-verify one prepared evidence bundle."""
+    try:
+        composed = prepared.llm.complete(
+            prompt_module.build_answer_prompt(
+                prepared.question, prepared.rows, prepared.executed_sql,
+            )
+        )
+    except LLMError as err:
+        return _refuse(
+            prepared.db, prepared.caller, prepared.question,
+            prepared.generated_sql, str(err), prepared.now,
+        )
+
+    text, _mentioned, hallucinated = verify_citations(composed, prepared.citations)
+    audit_ok = _audit(
+        prepared.db, prepared.caller, prepared.question,
+        prepared.generated_sql, prepared.executed_sql, prepared.citations,
+        prepared.rows, prepared.now,
+    )
+    return Answer(
+        text=text,
+        sql=prepared.executed_sql,
+        rows=prepared.rows,
+        citations=prepared.citations,
+        filter_citation=prepared.filter_citation,
         hallucinated_crimenos=hallucinated,
         audit_failed=not audit_ok,
     )
+
+
+def answer(question, caller, db, llm, today, now=None):
+    try:
+        prepared = prepare_query(question, caller, db, llm, today, now=now)
+    except PreparationError as err:
+        return _refuse(
+            db, caller, question, err.generated, str(err),
+            now or dt.datetime.now(dt.timezone.utc),
+        )
+    return compose_prepared(prepared)

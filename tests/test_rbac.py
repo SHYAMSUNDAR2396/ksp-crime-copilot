@@ -17,6 +17,11 @@ class FakeDB:
         return {1: [1, 2, 3, 4], 2: [5, 6, 7, 8], 3: [9, 10, 11, 12]}[district_id]
 
 
+class RowIdDB(FakeDB):
+    def unit_rowids_for_business_ids(self, unit_ids):
+        return [value + 1000 for value in unit_ids]
+
+
 def scoped(sql, caller, db=None):
     ast = validate.validate(sql)
     units = rbac.allowed_units(caller, db or FakeDB())
@@ -58,6 +63,11 @@ def test_scope_uses_the_casemaster_alias():
         'SELECT cm.CrimeNo FROM CaseMaster cm', CONSTABLE
     )
     assert 'cm.PoliceStationID IN (3)' in sql
+
+
+def test_scope_predicate_uses_catalyst_unit_rowids_when_backend_maps_them():
+    sql, _ = scoped('SELECT CaseMaster.CrimeNo FROM CaseMaster', CONSTABLE, RowIdDB())
+    assert 'PoliceStationID IN (1003)' in sql
 
 
 def test_existing_or_condition_is_parenthesised_before_anding_scope():

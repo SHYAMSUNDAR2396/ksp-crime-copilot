@@ -59,11 +59,12 @@ class QuickMLLLM(object):
 
     MODEL = "crm-di-glm47b_30b_it"
 
-    def __init__(self, endpoint, token, org_id, timeout=60):
+    def __init__(self, endpoint, token, org_id, timeout=60, model=None):
         self._endpoint = endpoint
         self._token = token
         self._org_id = org_id
         self._timeout = timeout
+        self._model = model or self.MODEL
 
     def complete(self, prompt):
         try:
@@ -75,7 +76,7 @@ class QuickMLLLM(object):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": self.MODEL,
+                    "model": self._model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.0,
                     "max_tokens": 2048,

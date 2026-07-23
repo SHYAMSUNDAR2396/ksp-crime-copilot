@@ -26,6 +26,31 @@ def _name_similarity(left, right):
     return round(overlap, 3)
 
 
+def _accused_profiles(case):
+    profiles = case.get("AccusedProfiles") or ()
+    if profiles:
+        return profiles
+    if case.get("AccusedName"):
+        return ((case.get("AccusedName"), case.get("AgeYear"), case.get("GenderID")),)
+    return ()
+
+
+def _identity_similarity(anchor, candidate):
+    best = 0.0
+    for left_name, left_age, left_gender in _accused_profiles(anchor):
+        for right_name, right_age, right_gender in _accused_profiles(candidate):
+            if left_gender and right_gender and str(left_gender) != str(right_gender):
+                continue
+            if left_age and right_age:
+                try:
+                    if abs(int(left_age) - int(right_age)) > 3:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            best = max(best, _name_similarity(left_name, right_name))
+    return best
+
+
 def _date(value):
     if isinstance(value, dt.datetime):
         return value.date()
@@ -53,7 +78,7 @@ def _distance_km(anchor, candidate):
 
 def score_candidate(anchor, candidate, semantic_signal=None):
     evidence = []
-    identity = _name_similarity(anchor.get("AccusedName"), candidate.get("AccusedName"))
+    identity = _identity_similarity(anchor, candidate)
     if identity >= 0.8:
         evidence.append(("person_name_similarity", identity))
     if anchor.get("CrimeSubHeadID") == candidate.get("CrimeSubHeadID"):
@@ -69,8 +94,10 @@ def score_candidate(anchor, candidate, semantic_signal=None):
         evidence.append(("geo_proximity", 10))
     if isinstance(semantic_signal, dict):
         raw_similarity = semantic_signal.get("similarity", 0.0)
+        index_version = str(semantic_signal.get("index_version") or "")
     else:
         raw_similarity = getattr(semantic_signal, "similarity", 0.0)
+        index_version = str(getattr(semantic_signal, "index_version", "") or "")
     similarity = float(raw_similarity or 0.0)
     if similarity > 0:
         evidence.append(("mo_similarity", min(10.0, max(0.0, similarity * 10.0))))
@@ -85,4 +112,7 @@ def score_candidate(anchor, candidate, semantic_signal=None):
     band = "High" if score >= 80 else "Medium" if score >= 60 else "Low"
     persistable = score >= 60 and (identity >= 0.8 or any(name in {"shared_section", "shared_crime_subhead"} for name, _ in evidence))
     limitation = "Semantic similarity is bounded evidence and cannot create an alert alone."
-    return ScoreResult(alert_type, score, band, tuple(evidence), persistable, limitation)
+    return ScoreResult(
+        alert_type, score, band, tuple(evidence), persistable, limitation,
+        index_version,
+    )

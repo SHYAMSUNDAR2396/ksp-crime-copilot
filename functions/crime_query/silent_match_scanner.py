@@ -19,13 +19,21 @@ class SilentMatchScanner:
     """
 
     def __init__(self, loader, matcher, repository, caller=None, clock=None,
-                 recipient_router=None):
+                 recipient_router=None, pair_authorizer=None,
+                 recipient_retry_attempts=2):
         self.loader = loader
         self.matcher = matcher
         self.repository = repository
         self.caller = caller
         self.clock = clock or (lambda: dt.datetime.now(dt.timezone.utc).isoformat())
         self.recipient_router = recipient_router or (lambda anchor, candidate: ())
+        self.pair_authorizer = pair_authorizer or (lambda anchor, candidate: True)
+        try:
+            self.recipient_retry_attempts = int(recipient_retry_attempts)
+        except (TypeError, ValueError):
+            raise ValueError("recipient retry attempts must be an integer")
+        if self.recipient_retry_attempts < 1:
+            raise ValueError("recipient retry attempts must be positive")
 
     def scan(self, date_window=None, anchor_case_id=None, trigger_source="batch"):
         if (date_window is None) == (anchor_case_id is None):
@@ -43,21 +51,34 @@ class SilentMatchScanner:
         alerts, failures, skipped = [], [], []
         created = updated = 0
         seen = set()
+        anchors_seen = 0
+        candidates_seen = 0
         for anchor in anchors:
             if trigger_source == "live" and not anchor.get("completed", True):
                 skipped.append({"case_id": anchor.get("CaseMasterID"), "reason": "pending_enrichment"})
                 continue
+            visible_candidates = []
+            for candidate in candidates:
+                if int(candidate.get("CaseMasterID")) == int(anchor.get("CaseMasterID")):
+                    continue
+                try:
+                    visible = self.pair_authorizer(anchor, candidate)
+                except Exception:
+                    visible = False
+                if visible:
+                    visible_candidates.append(candidate)
+            anchors_seen += 1
+            candidates_seen += len(visible_candidates)
             try:
                 semantic = self.matcher.similar_cases(
-                    anchor, candidates, self.caller, limit=max(10, len(candidates)),
+                    anchor, visible_candidates, self.caller,
+                    limit=max(10, len(visible_candidates)),
                 )
             except Exception as exc:
                 failures.append("semantic retrieval failed")
                 semantic = ()
             by_case = {int(item.matched_case_id): item for item in semantic}
-            for candidate in candidates:
-                if int(candidate.get("CaseMasterID")) == int(anchor.get("CaseMasterID")):
-                    continue
+            for candidate in visible_candidates:
                 pair = (min(int(anchor["CaseMasterID"]), int(candidate["CaseMasterID"])),
                         max(int(anchor["CaseMasterID"]), int(candidate["CaseMasterID"])))
                 if pair in seen:
@@ -72,21 +93,43 @@ class SilentMatchScanner:
                 )
                 alerts.append(alert)
                 if alert and hasattr(self.repository, "ensure_recipient"):
-                    for employee_id in self.recipient_router(anchor, candidate) or ():
-                        self.repository.ensure_recipient(alert["AlertID"], employee_id)
+                    self._deliver_recipients(
+                        alert, anchor, candidate, failures,
+                    )
                 if before:
                     updated += 1
                 else:
                     created += 1
         result = ScanResult(
             run_id=run_id, trigger_source=trigger_source,
-            anchors_seen=len(anchors), candidates_seen=len(candidates),
+            anchors_seen=anchors_seen, candidates_seen=candidates_seen,
             alerts=tuple(alerts), alerts_created=created, alerts_updated=updated,
             skipped_cases=tuple(skipped), failures=tuple(failures),
         )
         if hasattr(self.repository, "finish_run"):
             self.repository.finish_run(run_id, result, self.clock())
         return result
+
+    def _deliver_recipients(self, alert, anchor, candidate, failures):
+        try:
+            recipients = self.recipient_router(anchor, candidate) or ()
+        except Exception:
+            recipients = ()
+            failures.append("recipient delivery failed")
+        for employee_id in recipients:
+            delivered = False
+            for _attempt in range(self.recipient_retry_attempts):
+                try:
+                    self.repository.ensure_recipient(alert["AlertID"], employee_id)
+                    delivered = True
+                    break
+                except Exception:
+                    # Do not expose provider errors or recipient identifiers in
+                    # the scan result. The durable alert remains available for
+                    # an independent recipient retry/reconciliation job.
+                    continue
+            if not delivered and "recipient delivery failed" not in failures:
+                failures.append("recipient delivery failed")
 
     def _existing(self, alert_type, pair):
         for row in getattr(self.repository, "list_alerts", lambda: ())():

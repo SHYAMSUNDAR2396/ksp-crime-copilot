@@ -4,6 +4,18 @@
 **Evaluator**: Sisyphus (Orchestrated Multi-Agent Analysis)
 **Scope**: Full evaluation of PLAN.md and `2026-07-09-data-foundation-nl2sql.md`
 
+> **Current implementation status (2026-07-23):** This document is a historical
+> architecture assessment, not the live readiness certificate. The current
+> branch includes the GLM-4.7 Catalyst adapter, authenticated rank-derived
+> RBAC, typed evidence, conversation/voice parity, graph/analytics/profile/
+> demographic views, narrative retrieval, versioned graph projection,
+> supervisor task-graph execution, and cross-jurisdiction silent-match
+> indexing/scanning/alerts. The local suite currently passes 411 tests and the
+> deterministic integrated workflow passes. Live production readiness remains
+> unverified until the Catalyst CLI/project credentials, principal mapping,
+> QuickML RAG and multilingual embedding endpoints, scheduled jobs, and
+> authenticated Catalyst smoke checks are executed; see `docs/CATALYST_RUNBOOK.md`.
+
 ---
 
 ## Table of Contents
@@ -209,7 +221,7 @@ CREATE TABLE QueryMetrics (
 | # | Decision | Current | Alternative | Recommendation |
 |---|----------|---------|-------------|----------------|
 | A1 | Platform | Zoho Catalyst (mandatory) | N/A | **No choice — correct** |
-| A2 | LLM | QuickML Qwen 2.5-14B | External API | **QuickML required; fine-tune for Kannada** |
+| A2 | LLM | Catalyst QuickML GLM-4.7-Flash | External API | **QuickML required; validate Kannada quality** |
 | A3 | Entity Resolution | Deferred | Splink integration | **Defer to V2; define interface now** |
 | A4 | Graph DB | Deferred | Neo4j/NetworkX | **Defer to V2; schema design needed** |
 | A5 | Voice ASR | Not designed | Zia + AI4Bharat fallback | **Design now; critical path** |

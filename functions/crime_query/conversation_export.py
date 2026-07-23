@@ -1,10 +1,51 @@
 """Scope-safe conversation export with an injectable PDF renderer."""
 import html
+import base64
+
+import requests
 
 try:
     from .policy_audit import scope_safe_export
 except ImportError:  # pragma: no cover
     from policy_audit import scope_safe_export
+
+
+class SmartBrowzPdfRenderer:
+    """Render verified HTML through Catalyst SmartBrowz PDF & Screenshot."""
+
+    def __init__(self, endpoint, token, timeout=30, transport=None):
+        self.endpoint = endpoint
+        self.token = token
+        self.timeout = timeout
+        self.transport = transport or requests
+
+    def render(self, html_document):
+        if not self.endpoint or not self.token:
+            raise ValueError("SmartBrowz export is not configured")
+        encoded = base64.b64encode(html_document.encode("utf-8")).decode("ascii")
+        payload = {
+            "url": "data:text/html;base64," + encoded,
+            "output_options": {"output_type": "pdf"},
+            "pdf_options": {
+                "format": "A4",
+                "print_background": True,
+                "margin": {"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"},
+            },
+        }
+        response = self.transport.post(
+            self.endpoint,
+            headers={
+                "Authorization": "Zoho-oauthtoken " + self.token,
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        body = response.content
+        if not body.startswith(b"%PDF"):
+            raise ValueError("SmartBrowz did not return a PDF")
+        return body
 
 
 def render_conversation_html(rows):

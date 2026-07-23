@@ -29,10 +29,17 @@ def handler(request):
     from flask import jsonify, make_response
 
     try:
+        from ..crime_query import auth
         from .runtime import build_api
     except ImportError:
+        from functions.crime_query import auth
         from runtime import build_api
 
-    api = build_api(zcatalyst_sdk.initialize())
-    body, status = handle_request(request, api)
+    app = zcatalyst_sdk.initialize()
+    api = build_api(app)
+    employee_id = auth.authenticated_employee_id(app, api.caller_loader)
+    raw_payload = request.get_json(silent=True)
+    payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+    payload["employee_id"] = employee_id
+    status, body = api.handle(request.method, request.path, payload)
     return make_response(jsonify(body), status)
