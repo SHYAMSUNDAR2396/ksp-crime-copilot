@@ -10,7 +10,32 @@
   const intelligenceOutput = document.getElementById("intelligence-output");
   const caseId = document.getElementById("case-id");
   const demographicDimension = document.getElementById("demographic-dimension");
-  const sessionId = "browser-" + crypto.randomUUID();
+
+  function createSessionId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return "browser-" + window.crypto.randomUUID();
+    }
+    if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+      const bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      return "browser-" + Array.from(bytes).map(function (value) {
+        return value.toString(16).padStart(2, "0");
+      }).join("");
+    }
+    return "browser-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+  }
+
+  function setAuthStatus(response) {
+    if (response.status === 401 || response.status === 403) {
+      roleBadge.textContent = "Authentication required";
+    } else if (response.ok) {
+      roleBadge.textContent = "Authenticated officer";
+    } else {
+      roleBadge.textContent = "Service unavailable";
+    }
+  }
+
+  const sessionId = createSessionId();
   let turnId = 0;
   let activeRequest = null;
   let recognition = null;
@@ -233,8 +258,7 @@
         body: JSON.stringify({operation: "case_detail", crime_no: crimeNo})
       });
       const result = await response.json();
-      roleBadge.textContent = response.status === 401 || response.status === 403
-        ? "Authentication required" : "Authenticated officer";
+      setAuthStatus(response);
       if (!response.ok || result.refused) {
         intelligenceOutput.textContent = result.answer || "Citation access refused safely.";
         return;
@@ -336,8 +360,7 @@
         method: "GET", credentials: "same-origin"
       });
       const result = await response.json();
-      roleBadge.textContent = response.status === 401 || response.status === 403
-        ? "Authentication required" : "Authenticated officer";
+      setAuthStatus(response);
       if (!response.ok) {
         intelligenceOutput.textContent = result.error || "Alert access refused safely.";
         return;
@@ -375,8 +398,7 @@
         body: JSON.stringify(payload)
       });
       const result = await response.json();
-      roleBadge.textContent = response.status === 401 || response.status === 403
-        ? "Authentication required" : "Authenticated officer";
+      setAuthStatus(response);
       if (!response.ok) {
         intelligenceOutput.textContent = result.answer || result.error ||
           "The requested intelligence view was refused safely.";
@@ -397,8 +419,7 @@
         credentials: "same-origin",
         body: JSON.stringify({operation: "export", session_id: sessionId})
       });
-      roleBadge.textContent = response.status === 401 || response.status === 403
-        ? "Authentication required" : "Authenticated officer";
+      setAuthStatus(response);
       if (!response.ok) {
         const refused = await response.json();
         intelligenceOutput.textContent = refused.error || refused.code || "Export refused safely.";
@@ -463,8 +484,7 @@
         })
       });
       const result = await response.json();
-      roleBadge.textContent = response.status === 401 || response.status === 403
-        ? "Authentication required" : "Authenticated officer";
+      setAuthStatus(response);
       if (currentTurn !== turnId || result.turn_id && result.turn_id !== currentTurn) return;
       addMessage("assistant", result.answer || "No answer was returned.", result.citations || []);
       status.textContent = result.refused
