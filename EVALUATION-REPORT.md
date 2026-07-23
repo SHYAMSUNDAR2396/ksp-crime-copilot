@@ -12,8 +12,8 @@
 > supervisor task-graph execution, and cross-jurisdiction silent-match
 > indexing/scanning/alerts, explicit service-principal job boundaries, the
 > executable Catalyst job/event contracts, total supervisor deadline propagation,
-> Catalyst-backend bounded fan-out selection, and the replay/evaluation artifacts.
-> The local suite currently passes 432 tests,
+> Catalyst-backend bounded fan-out selection, per-series analytics warnings, and
+> the replay/evaluation artifacts. The local suite currently passes 433 tests,
 > the nine-beat deterministic backup replay
 > passes 9/9, and the labelled offline contract baseline passes 30/30. Live
 > production readiness remains

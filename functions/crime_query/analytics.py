@@ -104,6 +104,8 @@ def dbscan_hotspots(cases, eps_km=0.5, min_samples=3):
 
 def forecast_next_period(counts, window=3):
     """Return a mean baseline and next-period estimate from aggregate counts."""
+    if isinstance(window, bool) or not isinstance(window, int) or window < 1:
+        raise ValueError("forecast window must be a positive integer")
     values = [float(value) for value in counts if value is not None]
     if not values:
         return {"baseline": 0.0, "forecast": 0.0, "observations": 0}
@@ -115,6 +117,8 @@ def forecast_next_period(counts, window=3):
 
 
 def early_warning(counts, threshold_ratio=1.25, window=3):
+    if isinstance(threshold_ratio, bool) or float(threshold_ratio) <= 0:
+        raise ValueError("warning threshold must be positive")
     forecast = forecast_next_period(counts, window)
     baseline = forecast["baseline"]
     ratio = (forecast["forecast"] / baseline) if baseline else 0.0
@@ -123,7 +127,34 @@ def early_warning(counts, threshold_ratio=1.25, window=3):
         "ratio": round(ratio, 3),
         "warning": bool(baseline and ratio >= threshold_ratio),
         "scope": "station-by-crime-type aggregate",
+        "provider": "deterministic_moving_average",
     }
+
+
+def series_warnings(trends, threshold_ratio=1.25, window=3):
+    """Forecast each station/crime series independently.
+
+    A warning for one station and crime type must never be inflated by trend
+    points belonging to another series.  Citations remain attached to the
+    same series so an operator can inspect the source cases.
+    """
+    groups = defaultdict(lambda: {"counts": [], "citations": []})
+    for point in trends or ():
+        key = (point.station_id, point.crime_subhead_id)
+        groups[key]["counts"].append(point.count)
+        for citation in point.citations:
+            if citation and citation not in groups[key]["citations"]:
+                groups[key]["citations"].append(citation)
+    result = []
+    for (station_id, crime_subhead_id), values in sorted(groups.items(), key=lambda item: str(item[0])):
+        warning = early_warning(values["counts"], threshold_ratio, window)
+        result.append({
+            "station_id": station_id,
+            "crime_subhead_id": crime_subhead_id,
+            **warning,
+            "citations": tuple(values["citations"]),
+        })
+    return tuple(result)
 
 
 def prevention_brief(warning, hotspots, network_nodes=()):

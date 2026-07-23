@@ -3,11 +3,11 @@ from dataclasses import asdict
 
 try:
     from .access import require_capability
-    from .analytics import dbscan_hotspots, early_warning, prevention_brief, trend_rollup
+    from .analytics import dbscan_hotspots, early_warning, prevention_brief, series_warnings, trend_rollup
     from .graph import build_derived_edges, network_metrics, traverse
 except ImportError:  # pragma: no cover
     from access import require_capability
-    from analytics import dbscan_hotspots, early_warning, prevention_brief, trend_rollup
+    from analytics import dbscan_hotspots, early_warning, prevention_brief, series_warnings, trend_rollup
     from graph import build_derived_edges, network_metrics, traverse
 
 
@@ -64,8 +64,14 @@ def analytics_view(context, cases, threshold_ratio=1.25):
     ]
     trends = trend_rollup(visible)
     hotspots = dbscan_hotspots(visible)
-    counts = [point.count for point in trends]
-    warning = early_warning(counts, threshold_ratio=threshold_ratio)
+    warnings = series_warnings(trends, threshold_ratio=threshold_ratio)
+    if warnings:
+        warning = dict(max(warnings, key=lambda item: item["ratio"]))
+        warning["warning"] = any(item["warning"] for item in warnings)
+        warning["series"] = warnings
+    else:
+        warning = early_warning((), threshold_ratio=threshold_ratio)
+        warning["series"] = ()
     return {
         "trends": tuple(asdict(point) for point in trends),
         "hotspots": tuple(asdict(hotspot) for hotspot in hotspots),

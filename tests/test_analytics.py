@@ -3,6 +3,7 @@ from functions.crime_query.analytics import (
     early_warning,
     forecast_next_period,
     prevention_brief,
+    series_warnings,
     trend_rollup,
 )
 import pytest
@@ -26,3 +27,26 @@ def test_warning_is_aggregate_only_and_prevention_brief_has_no_person_score():
     assert warning["warning"] is True
     assert warning["scope"] == "station-by-crime-type aggregate"
     assert "risk score" in brief["claims"][1]
+
+
+def test_series_warnings_do_not_mix_stations_or_crime_types():
+    rows = [
+        {"CaseMasterID": 1, "CrimeNo": "FIR/1", "CrimeRegisteredDate": "2026-01-01",
+         "PoliceStationID": 1, "CrimeMinorHeadID": 6},
+        {"CaseMasterID": 2, "CrimeNo": "FIR/2", "CrimeRegisteredDate": "2026-02-01",
+         "PoliceStationID": 1, "CrimeMinorHeadID": 6},
+        {"CaseMasterID": 3, "CrimeNo": "FIR/3", "CrimeRegisteredDate": "2026-03-01",
+         "PoliceStationID": 1, "CrimeMinorHeadID": 6},
+        {"CaseMasterID": 4, "CrimeNo": "FIR/4", "CrimeRegisteredDate": "2026-01-01",
+         "PoliceStationID": 2, "CrimeMinorHeadID": 9},
+        {"CaseMasterID": 5, "CrimeNo": "FIR/5", "CrimeRegisteredDate": "2026-02-01",
+         "PoliceStationID": 2, "CrimeMinorHeadID": 9},
+    ]
+    warnings = series_warnings(trend_rollup(rows), threshold_ratio=1.1)
+
+    assert {(row["station_id"], row["crime_subhead_id"]) for row in warnings} == {
+        (1, 6), (2, 9),
+    }
+    first = next(row for row in warnings if row["station_id"] == 1)
+    assert first["observations"] == 3
+    assert first["warning"] is False

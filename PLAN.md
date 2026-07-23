@@ -349,9 +349,9 @@ tasks use Catalyst Functions. No non-Catalyst service is introduced.
 | Capability | Implementation |
 |---|---|
 | **Crime pattern discovery** (GraphRAG, Regime B) | GraphRAG fusion: structured filter → graph expansion over shared persons/sections/geo → `BriefFacts` semantic rerank → composed pattern with citations. Complemented by DBSCAN spatial clusters; repeat patterns fall out of the entity-resolution graph. |
-| **Trend detection** | Group-by roll-ups over `CrimeRegisteredDate` × `CrimeSubHeadID` × `PoliceStationID`; QuickML time-series for smoothing/seasonality. |
+| **Trend detection** | Group-by roll-ups over `CrimeRegisteredDate` × `CrimeSubHeadID` × `PoliceStationID`; each station/type series is forecast independently, with QuickML time-series available as the live smoothing/seasonality enhancement. |
 | **Hotspot map** | DBSCAN clusters rendered on a map view in the UI. |
-| **Predictive analytics & early warnings** | QuickML time-series/anomaly forecast of next-period case counts per station × crime type; alert when actual or forecast crosses threshold vs. historical baseline. **Geographic/temporal only — never a per-person risk score.** |
+| **Predictive analytics & early warnings** | Per-station × crime-type baseline/forecast and bounded warning output; the local adapter uses a deterministic moving average and the live deployment may replace it with QuickML time-series/anomaly output. **Geographic/temporal only — never a per-person risk score.** |
 | **Criminal network analysis** (GraphRAG, Regime B) | Graph traversal (k-hop, path) **plus community detection and centrality**, run as a Function (NetworkX or equivalent) over a snapshot of the edge tables — surfaces rings and brokers; GraphRAG composes the finding into a cited narrative. |
 | **Network visualization** | Function returns the subgraph for a person/case; frontend renders with a lightweight force-directed component. |
 | **Socio-demographic insights** | NL→SQL aggregates over `ComplainantDetails`/`Victim`/`Accused` demographics (age, gender, occupation; religion/caste only as aggregates to analyst/SP roles). **Guardrail: caste/religion are never features in any predictive or scoring model.** |
