@@ -16,18 +16,30 @@ try:
     from .index_cases import IndexJob, OperationalIndexStatusStore
     from ..crime_query.graph_projection import GraphProjectionJob
 except ImportError:  # pragma: no cover
-    from functions.crime_query import access
-    from functions.crime_query.db import ZcqlDB
-    from functions.crime_query.mo_embeddings import (
-        QuickMLMultilingualProvider, UnavailableEmbeddingProvider,
-    )
-    from functions.crime_query.mo_index import OperationalMoIndex
-    from functions.crime_query.mo_matcher import MoMatcher
-    from functions.crime_query.silent_match_api import SilentMatchAPI
-    from functions.crime_query.silent_match_repository import SilentMatchRepository
-    from functions.crime_query.silent_match_scanner import SilentMatchScanner
-    from functions.silent_match.index_cases import IndexJob, OperationalIndexStatusStore
-    from functions.crime_query.graph_projection import GraphProjectionJob
+    try:
+        from functions.crime_query import access
+        from functions.crime_query.db import ZcqlDB
+        from functions.crime_query.mo_embeddings import (
+            QuickMLMultilingualProvider, UnavailableEmbeddingProvider,
+        )
+        from functions.crime_query.mo_index import OperationalMoIndex
+        from functions.crime_query.mo_matcher import MoMatcher
+        from functions.crime_query.silent_match_api import SilentMatchAPI
+        from functions.crime_query.silent_match_repository import SilentMatchRepository
+        from functions.crime_query.silent_match_scanner import SilentMatchScanner
+        from functions.silent_match.index_cases import IndexJob, OperationalIndexStatusStore
+        from functions.crime_query.graph_projection import GraphProjectionJob
+    except ImportError:
+        import access
+        from db import ZcqlDB
+        from mo_embeddings import QuickMLMultilingualProvider, UnavailableEmbeddingProvider
+        from mo_index import OperationalMoIndex
+        from mo_matcher import MoMatcher
+        from silent_match_api import SilentMatchAPI
+        from silent_match_repository import SilentMatchRepository
+        from silent_match_scanner import SilentMatchScanner
+        from index_cases import IndexJob, OperationalIndexStatusStore
+        from graph_projection import GraphProjectionJob
 
 
 class CatalystCaseLoader:

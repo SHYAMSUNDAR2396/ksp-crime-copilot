@@ -138,7 +138,11 @@ date. This keeps retrieval bounded and preserves batch/live scoring parity.
 The repository root [`catalyst.json`](../catalyst.json) is the whole-project
 deployment manifest. It targets both Advanced I/O functions and the `web/`
 client; the function-specific `catalyst-config.json` files remain the source
-of each function's runtime and environment configuration.
+of each function's runtime and environment configuration. Its `predeploy`
+hook runs [`tools/prepare_catalyst_deploy.py`](../tools/prepare_catalyst_deploy.py)
+so the independently packaged `silent_match` function receives its reviewed
+shared-module closure without duplicating source ownership. If a function is
+uploaded directly from the console, run that preparation command first.
 
 1. Create the official Data Store tables from [`schema-ddl.sql`](schema-ddl.sql),
    the operational tables from [`silent-match-alerts-ddl.sql`](silent-match-alerts-ddl.sql),

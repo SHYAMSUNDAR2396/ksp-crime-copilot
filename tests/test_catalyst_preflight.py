@@ -79,6 +79,8 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
     }
     (root / "functions/crime_query/catalyst-config.json").write_text(json.dumps(config))
     (root / "functions/silent_match/catalyst-config.json").write_text(json.dumps(silent_config))
+    (root / "functions/crime_query/requirements.txt").write_text("zcatalyst-sdk==1.3.0\n")
+    (root / "functions/silent_match/requirements.txt").write_text("zcatalyst-sdk==1.3.0\n")
     (root / "web").mkdir()
     (root / "catalyst.json").write_text(json.dumps({
         "functions": {

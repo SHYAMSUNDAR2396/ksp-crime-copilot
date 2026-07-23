@@ -165,6 +165,10 @@ def run_preflight(root, require_live=False, catalyst_available=None):
             and deployment.get("type") == "advancedio"
             and execution.get("main") == "main.py"
         ), "Python 3.9 Advanced I/O entrypoint")
+        requirements_path = root / "functions" / name / "requirements.txt"
+        requirements = requirements_path.read_text(encoding="utf-8") if requirements_path.exists() else ""
+        check("{}_requirements".format(name), "zcatalyst-sdk" in requirements,
+              "Catalyst Python SDK dependency declared")
 
     crime_env = configs["crime_query"].get("deployment", {}).get("env_variables", {})
     silent_env = configs["silent_match"].get("deployment", {}).get("env_variables", {})

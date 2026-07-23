@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 build/
 .omo
+functions/silent_match/_vendor/

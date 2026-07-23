@@ -5,7 +5,10 @@ import datetime as dt
 try:
     from ..crime_query.mo_normalize import normalize_narrative
 except ImportError:  # pragma: no cover
-    from functions.crime_query.mo_normalize import normalize_narrative
+    try:
+        from functions.crime_query.mo_normalize import normalize_narrative
+    except ImportError:
+        from mo_normalize import normalize_narrative
 
 
 @dataclass(frozen=True)

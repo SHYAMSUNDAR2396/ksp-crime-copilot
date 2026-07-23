@@ -5,6 +5,14 @@ request adapter injectable makes the HTTP contract fully testable offline and
 prevents Catalyst SDK objects from leaking into the domain API.
 """
 
+import os
+import sys
+
+
+_VENDOR = os.path.join(os.path.dirname(__file__), "_vendor")
+if os.path.isdir(_VENDOR) and _VENDOR not in sys.path:
+    sys.path.insert(0, _VENDOR)
+
 
 def handle_request(request, api):
     """Translate a Flask-like request into ``(body, status_code)``."""
@@ -32,8 +40,12 @@ def handler(request):
         from ..crime_query import auth
         from .runtime import build_api
     except ImportError:
-        from functions.crime_query import auth
-        from runtime import build_api
+        try:
+            from functions.crime_query import auth
+            from runtime import build_api
+        except ImportError:
+            import auth
+            from runtime import build_api
 
     app = zcatalyst_sdk.initialize()
     api = build_api(app)

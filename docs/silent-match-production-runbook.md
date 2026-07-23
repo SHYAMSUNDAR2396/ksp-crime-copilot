@@ -15,6 +15,8 @@ matching and silent-match alerts. The implementation contract is in
   and post-ingestion triggers.
 - [`catalyst-job-contracts.json`](catalyst-job-contracts.json): executable
   route, payload, identity, and bounded-retry manifest for those triggers.
+- `tools/prepare_catalyst_deploy.py`: predeploy vendor step for the shared
+  modules required by the independently packaged `silent_match` function.
 - `functions/crime_query/graph_projection.py`: versioned relationship-graph
   projection job for `PersonNode`, `PersonMember`, and the derived edge tables.
 - `MoEmbeddingRecord`: versioned operational records; old model/index versions
@@ -23,6 +25,16 @@ matching and silent-match alerts. The implementation contract is in
   it contains no narrative text or provider error details.
 
 ## Required configuration
+
+The root `catalyst.json` runs the vendor step automatically for whole-project
+deploys. For a direct function upload, prepare the bundle explicitly:
+
+```bash
+python -m tools.prepare_catalyst_deploy
+```
+
+The generated `functions/silent_match/_vendor/` directory is ignored by Git
+and must be present in the uploaded function package.
 
 Set these values in `functions/silent_match/catalyst-config.json` before
 deployment. Do not commit tokens or narrative data.
