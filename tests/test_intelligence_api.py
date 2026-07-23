@@ -32,6 +32,48 @@ def test_network_operation_returns_cited_scope_safe_data(tmp_path):
     db.close()
 
 
+def test_case_detail_returns_exact_visible_case_and_brief_facts(tmp_path):
+    db = _db(tmp_path)
+    row = db.execute_raw(
+        'SELECT CrimeNo, BriefFacts FROM "CaseMaster" '
+        'WHERE CaseMasterID = 1'
+    )[0]
+
+    result = handle_operation({
+        "employee_id": 9,
+        "operation": "case_detail",
+        "crime_no": row["CrimeNo"],
+    }, db, dt.date(2026, 7, 22))
+
+    assert result["refused"] is False
+    assert result["citations"] == [row["CrimeNo"]]
+    assert result["data"]["case"]["CrimeNo"] == row["CrimeNo"]
+    assert result["data"]["case"]["BriefFacts"] == row["BriefFacts"]
+    assert "AccusedName" not in result["data"]["case"]
+    db.close()
+
+
+def test_case_detail_refuses_case_outside_station_scope(tmp_path):
+    db = _db(tmp_path)
+    row = db.execute_raw(
+        'SELECT CrimeNo FROM "CaseMaster" '
+        'WHERE PoliceStationID = '
+        '(SELECT rowid FROM "Unit" WHERE UnitID = 1) LIMIT 1'
+    )[0]
+
+    result = handle_operation({
+        "employee_id": 12,
+        "operation": "case_detail",
+        "crime_no": row["CrimeNo"],
+    }, db, dt.date(2026, 7, 22))
+
+    assert result["refused"] is True
+    assert result["policy_code"] == "SCOPE_DENIED"
+    assert result["citations"] == []
+    assert row["CrimeNo"] not in result["answer"]
+    db.close()
+
+
 def test_analytics_operation_is_capability_gated(tmp_path):
     db = _db(tmp_path)
     result = handle_operation({

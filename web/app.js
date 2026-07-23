@@ -64,6 +64,10 @@
       renderNetwork(result.data, result);
       return;
     }
+    if (result.data && result.data.case) {
+      renderCaseDetail(result.data, result);
+      return;
+    }
     if (result.data && (result.data.hotspots || result.data.trends)) {
       renderAnalytics(result.data, result);
       return;
@@ -79,6 +83,29 @@
     intelligenceOutput.textContent = "Evidence: " + result.evidence.status +
       "\nCitations: " + ((result.citations || []).join(", ") || "none") +
       "\n\n" + JSON.stringify(result.data, null, 2);
+  }
+
+  function renderCaseDetail(data, result) {
+    intelligenceOutput.textContent = "";
+    const summary = document.createElement("p");
+    summary.textContent = "Exact visible case evidence · " +
+      ((result.citations || []).join(", ") || "no citation");
+    intelligenceOutput.appendChild(summary);
+    const table = document.createElement("table");
+    table.className = "case-detail-table";
+    const body = document.createElement("tbody");
+    Object.keys(data.case || {}).forEach(function (key) {
+      const row = document.createElement("tr");
+      const heading = document.createElement("th");
+      heading.textContent = key;
+      const value = document.createElement("td");
+      value.textContent = String(data.case[key] == null ? "" : data.case[key]);
+      row.appendChild(heading);
+      row.appendChild(value);
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+    intelligenceOutput.appendChild(table);
   }
 
   function renderAnalytics(data, result) {
@@ -163,12 +190,47 @@
     list.className = "narrative-results";
     (data.matches || []).forEach(function (match) {
       const item = document.createElement("li");
-      item.textContent = String(match.crime_no || "") + " · score " +
+      item.appendChild(citationButton(match.crime_no));
+      item.appendChild(document.createTextNode(" · score " +
         String(match.score == null ? "" : match.score) + " — " +
-        String(match.excerpt || "");
+        String(match.excerpt || "")));
       list.appendChild(item);
     });
     intelligenceOutput.appendChild(list);
+  }
+
+  function citationButton(crimeNo) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "citation-link";
+    button.textContent = String(crimeNo || "citation");
+    button.addEventListener("click", function () {
+      loadCaseDetail(String(crimeNo || ""));
+    });
+    return button;
+  }
+
+  async function loadCaseDetail(crimeNo) {
+    if (!crimeNo) return;
+    intelligenceOutput.textContent = "Loading the scope-checked citation…";
+    try {
+      const response = await fetch("/functions/crime_query", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        credentials: "same-origin",
+        body: JSON.stringify({operation: "case_detail", crime_no: crimeNo})
+      });
+      const result = await response.json();
+      roleBadge.textContent = response.status === 401 || response.status === 403
+        ? "Authentication required" : "Authenticated officer";
+      if (!response.ok || result.refused) {
+        intelligenceOutput.textContent = result.answer || "Citation access refused safely.";
+        return;
+      }
+      renderCaseDetail(result.data, result);
+    } catch (error) {
+      intelligenceOutput.textContent = "Citation service unavailable. Retry while authenticated.";
+    }
   }
 
   function renderAlerts(data) {
@@ -350,7 +412,11 @@
     if (citations && citations.length) {
       const cite = document.createElement("div");
       cite.className = "citations";
-      cite.textContent = "Citations: " + citations.join(", ");
+      cite.appendChild(document.createTextNode("Citations: "));
+      citations.forEach(function (crimeNo, index) {
+        if (index) cite.appendChild(document.createTextNode(", "));
+        cite.appendChild(citationButton(crimeNo));
+      });
       node.appendChild(cite);
     }
     conversation.appendChild(node);

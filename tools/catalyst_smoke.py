@@ -159,6 +159,11 @@ def run_smoke(client, config):
                 lambda body: {"refused", "data", "citations", "evidence"} <= set(body),
             ),
             (
+                "case_detail",
+                {"operation": "case_detail", "case_master_id": int(config.case_id)},
+                lambda body: {"refused", "data", "citations", "evidence"} <= set(body),
+            ),
+            (
                 "network",
                 {"operation": "network", "case_master_id": int(config.case_id)},
                 lambda body: {"refused", "data", "citations", "evidence"} <= set(body),

@@ -192,6 +192,8 @@ authenticated Catalyst project:
 - Constable, inspector, SP, and statewide requests produce the expected scope.
 - Missing principal mapping and missing capability both refuse safely.
 - Every answer and alert contains only authorized `CrimeNo` citations.
+- Citation links resolve through the authenticated `case_detail` operation,
+  which returns the exact visible `CaseMaster` fields and `BriefFacts` only.
 - Caste and religion remain descriptive aggregate dimensions only and are never
   used as person risk or predictive features.
 - GLM-4.7-Flash returns a composed answer without visible reasoning traces.

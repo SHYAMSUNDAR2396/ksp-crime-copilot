@@ -17,6 +17,9 @@ h1 { margin: 4px 0 0; font-size: 1.7rem; }
 .audit-table { border-collapse: collapse; min-width: 100%; font-size: .82rem; }
 .audit-table th, .audit-table td { border-bottom: 1px solid #d8e2eb; padding: 8px; text-align: left; vertical-align: top; }
 .audit-table td:nth-child(3) { min-width: 18rem; }
+.case-detail-table { border-collapse: collapse; min-width: 100%; font-size: .82rem; }
+.case-detail-table th, .case-detail-table td { border-bottom: 1px solid #d8e2eb; padding: 8px; text-align: left; vertical-align: top; }
+.case-detail-table th { width: 13rem; color: #53657a; }
 .alert-table { border-collapse: collapse; min-width: 100%; font-size: .82rem; }
 .alert-table th, .alert-table td { border-bottom: 1px solid #d8e2eb; padding: 8px; text-align: left; vertical-align: top; }
 .alert-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 13rem; }
@@ -34,6 +37,7 @@ h1 { margin: 4px 0 0; font-size: 1.7rem; }
 .message.user { margin-left: auto; color: white; background: #174a7e; }
 .message.assistant { color: #233044; background: #f1f5f9; }
 .citations { margin-top: 9px; color: #476581; font-size: .82rem; }
+.citation-link { padding: 0; color: #174a7e; background: transparent; text-decoration: underline; }
 .composer { padding: 14px; border: 1px solid #d3dde8; border-radius: 16px; background: white; }
 textarea { width: 100%; resize: vertical; border: 0; outline: 0; font: inherit; color: inherit; }
 .composer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }

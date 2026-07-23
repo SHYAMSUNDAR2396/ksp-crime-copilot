@@ -254,6 +254,7 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
         "analytics": "analytics",
         "profile": "narrative_query",
         "demographics": "structured_query",
+        "case_detail": "structured_query",
     }.get(operation)
     if task_type is None:
         return _refused("That intelligence operation is not available.", "CAPABILITY_DENIED")
@@ -287,7 +288,39 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
 
     cases = _case_rows(db)
     visible = _scope_rows(context, cases)
-    if operation == "network":
+    if operation == "case_detail":
+        crime_no = payload.get("crime_no")
+        case_master_id = payload.get("case_master_id")
+        if isinstance(crime_no, str) and crime_no.strip():
+            crime_no = crime_no.strip()
+            selected = next(
+                (row for row in visible if str(row.get("CrimeNo")) == crime_no), None
+            )
+        elif (
+            isinstance(case_master_id, int)
+            and not isinstance(case_master_id, bool)
+            and case_master_id > 0
+        ):
+            selected = next(
+                (row for row in visible
+                 if int(row.get("CaseMasterID")) == case_master_id), None
+            )
+            crime_no = str(selected.get("CrimeNo")) if selected else ""
+        else:
+            return _refused("A citation is required for case detail.", "SCOPE_DENIED")
+        if selected is None:
+            return _refused("That citation is outside your authorised scope.", "SCOPE_DENIED")
+        detail_fields = (
+            "CaseMasterID", "CrimeNo", "CrimeRegisteredDate", "IncidentFromDate",
+            "PoliceStationID", "PolicePersonID", "CrimeMinorHeadID", "BriefFacts",
+            "latitude", "longitude", "DistrictID",
+        )
+        data = {
+            "case": {field: selected.get(field) for field in detail_fields},
+            "citations": (crime_no,),
+        }
+        claims = ("Exact visible CaseMaster evidence was opened for this citation.",)
+    elif operation == "network":
         case_id = payload.get("case_master_id")
         if case_id is None:
             return _refused("A case is required for a network view.", "SCOPE_DENIED")
@@ -354,6 +387,7 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
         claims = ("Demographics are aggregate-only and never used as a person score.",)
 
     citations = tuple(data.get("citations", ()))
+    evidence_rows = (data["case"],) if operation == "case_detail" else visible
 
     # The authenticated view is also a supervisor task graph. Domain work is
     # already scoped above; these handlers package its independent evidence
@@ -361,7 +395,7 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
     # required-agent completion, and post-merge composition for every view.
     operation_handlers = {
         "Structured Query Agent": lambda _task, _payload: _operation_bundle(
-            "Structured Query Agent", visible, citations,
+            "Structured Query Agent", evidence_rows, citations,
             ("RBAC-scoped structured case evidence prepared.",),
             "rbac_scoped_rows", "intelligence-structured-v1",
         ),

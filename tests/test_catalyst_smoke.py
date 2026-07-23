@@ -129,7 +129,7 @@ def test_smoke_views_cover_voice_narrative_intelligence_and_audit_contracts():
             "turn_id": 1, "voice": {}, "citations": [], "refused": False,
             "data": {}, "evidence": {},
         })
-        for _ in range(7)
+        for _ in range(8)
     )
     client = Client(responses)
 
@@ -138,7 +138,7 @@ def test_smoke_views_cover_voice_narrative_intelligence_and_audit_contracts():
     assert report["ok"] is True
     assert [step["name"] for step in report["steps"]] == [
         "crime_query", "similar_cases", "alerts", "voice_query", "narrative",
-        "network", "analytics", "profile", "demographics", "audit",
+        "case_detail", "network", "analytics", "profile", "demographics", "audit",
     ]
 
 
