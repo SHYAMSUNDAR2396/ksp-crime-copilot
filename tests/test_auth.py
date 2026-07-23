@@ -1,5 +1,6 @@
 from functions.crime_query.auth import (
     authenticated_employee_id,
+    authenticated_employee_id_for_route,
     authenticated_principal,
     employee_id_from_user,
     principal_allowed_for_route,
@@ -93,3 +94,19 @@ def test_service_principal_is_restricted_to_job_routes():
     assert principal_allowed_for_route("service", "GET", "/alerts") is False
     assert principal_allowed_for_route("service", "POST", "/alerts/1/transition") is False
     assert principal_allowed_for_route("user", "GET", "/alerts") is True
+
+
+def test_route_bound_identity_rejects_service_principal_from_interactive_query(monkeypatch):
+    class Authentication:
+        def get_current_user(self):
+            return {"user_id": "catalyst-cron"}
+
+    class App:
+        def authentication(self):
+            return Authentication()
+
+    monkeypatch.setenv("KSP_AUTH_EMPLOYEE_MAP", '{"catalyst-cron": 9}')
+    monkeypatch.setenv("KSP_AUTH_SERVICE_MAP", '{"catalyst-cron": 9001}')
+    assert authenticated_employee_id_for_route(
+        App(), lambda employee_id: object(), "POST", "/"
+    ) is None

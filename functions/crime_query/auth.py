@@ -156,3 +156,15 @@ def authenticated_employee_id(app, caller_loader, environ=None):
     """
     principal = authenticated_principal(app, caller_loader, environ)
     return principal.employee_id if principal is not None else None
+
+
+def authenticated_employee_id_for_route(
+    app, caller_loader, method, path, environ=None
+):
+    """Resolve an authenticated employee only when its principal may use a route."""
+    principal = authenticated_principal(app, caller_loader, environ)
+    if principal is None or not principal_allowed_for_route(
+        principal.kind, method, path
+    ):
+        return None
+    return principal.employee_id

@@ -355,7 +355,9 @@ def handler(request):
     # Security Rules must require Catalyst authentication. The client-supplied
     # employee_id is intentionally discarded; only the authenticated
     # principal-to-Employee mapping can select an RBAC caller.
-    payload["employee_id"] = auth.authenticated_employee_id(app, db.caller_for)
+    payload["employee_id"] = auth.authenticated_employee_id_for_route(
+        app, db.caller_for, request.method, request.path
+    )
     if payload.get("operation") == "export":
         conversation_store = CatalystCacheConversationStore(app.cache())
         result = conversation_api.export_session(
