@@ -53,9 +53,11 @@ functions. `MoEmbeddingRecord` is unique by
 5. remove an old version only through a reviewed retention operation.
 
 The index job skips a case already marked `indexed` for the requested version,
-retries a prior `failed` case, and records only a safe case ID/failure count in
-its result. Provider exceptions and narrative text are not returned in job
-logs.
+embeds pending cases in the provider's configured batch size, retries a failed
+batch one case at a time, retries prior `failed` cases, and records only a safe
+case ID/failure count in its result. Provider exceptions and narrative text are
+not returned in job logs. A provider vector-count mismatch fails the affected
+batch rather than silently dropping cases.
 
 The authoritative ER model has no `Employee.Active` column. Command-recipient
 eligibility therefore joins `Employee` to `Rank` and requires

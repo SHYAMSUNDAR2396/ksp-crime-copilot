@@ -1,5 +1,7 @@
 import sqlite3
 
+import pytest
+
 from functions.crime_query import catalog, db as db_module
 from functions.silent_match.index_cases import (
     IndexJob, OperationalIndexStatusStore, index_cases,
@@ -14,6 +16,18 @@ class Provider:
     def embed_documents(self, texts):
         self.texts.extend(texts)
         return [[1.0, 0.0] for _ in texts]
+
+
+class BatchProvider(Provider):
+    batch_size = 2
+
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def embed_documents(self, texts):
+        self.calls.append(list(texts))
+        return super().embed_documents(texts)
 
 
 class Index:
@@ -85,6 +99,55 @@ def test_index_job_records_failure_without_provider_details():
     assert result.failures == (3,)
     assert "secret" not in repr(result)
     assert "secret" not in repr(status)
+
+
+def test_index_job_batches_provider_requests_using_configured_batch_size():
+    provider, index = BatchProvider(), Index()
+    cases = [
+        {"CaseMasterID": number, "CrimeNo": "FIR/{0}".format(number),
+         "BriefFacts": "theft {0}".format(number)}
+        for number in range(1, 6)
+    ]
+
+    result = IndexJob(cases, provider, index).run("mo-v1")
+
+    assert result.indexed == 5
+    assert [len(call) for call in provider.calls] == [2, 2, 1]
+    assert len(index.records) == 5
+
+
+def test_index_cases_rejects_provider_vector_count_mismatch():
+    class ShortProvider(Provider):
+        def embed_documents(self, texts):
+            return [[1.0, 0.0]]
+
+    with pytest.raises(ValueError, match="vector count"):
+        index_cases([
+            {"CaseMasterID": 1, "CrimeNo": "FIR/1", "BriefFacts": "theft"},
+            {"CaseMasterID": 2, "CrimeNo": "FIR/2", "BriefFacts": "burglary"},
+        ], ShortProvider(), Index())
+
+
+def test_failed_batch_retries_cases_individually_without_losing_healthy_rows():
+    class BatchFailureProvider(BatchProvider):
+        def embed_documents(self, texts):
+            self.calls.append(list(texts))
+            if len(texts) > 1:
+                raise RuntimeError("batch unavailable")
+            return [[1.0, 0.0] for _ in texts]
+
+    provider, index = BatchFailureProvider(), Index()
+    cases = [
+        {"CaseMasterID": number, "CrimeNo": "FIR/{0}".format(number),
+         "BriefFacts": "theft {0}".format(number)}
+        for number in range(1, 4)
+    ]
+
+    result = IndexJob(cases, provider, index).run("mo-v1")
+
+    assert result.indexed == 3
+    assert result.failures == ()
+    assert [len(call) for call in provider.calls] == [2, 1, 1, 1]
 
 
 def test_operational_index_status_survives_job_restart(tmp_path):

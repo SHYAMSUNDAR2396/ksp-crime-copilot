@@ -103,6 +103,7 @@ class IndexJob:
 
         indexed = skipped = retried = 0
         failures = []
+        pending = []
         for case in self.cases:
             case_id = int(case["CaseMasterID"])
             state = self.status.get(case_id, {})
@@ -117,25 +118,46 @@ class IndexJob:
                 "index_version": version,
                 "failure_count": int(state.get("failure_count", 0)),
             })
+            pending.append((case, state))
+
+        try:
+            batch_size = int(getattr(self.provider, "batch_size", 1))
+        except (TypeError, ValueError):
+            batch_size = 1
+        batch_size = max(1, batch_size)
+        for offset in range(0, len(pending), batch_size):
+            batch = pending[offset:offset + batch_size]
+            cases = [item[0] for item in batch]
             try:
                 index_cases(
-                    [case], self.provider, self.index,
+                    cases, self.provider, self.index,
                     provider_name=self.provider_name, now=self.now,
                 )
             except Exception:
-                failures.append(case_id)
-                self._set_status(case_id, {
-                    "status": "failed",
-                    "index_version": version,
-                    "failure_count": int(state.get("failure_count", 0)) + 1,
-                })
+                # A batch failure must not mark every case as permanently
+                # failed: retry each case once so one malformed narrative or
+                # transient provider response cannot hide healthy records.
+                for case, state in batch:
+                    case_id = int(case["CaseMasterID"])
+                    try:
+                        index_cases(
+                            [case], self.provider, self.index,
+                            provider_name=self.provider_name, now=self.now,
+                        )
+                    except Exception:
+                        failures.append(case_id)
+                        self._set_status(case_id, {
+                            "status": "failed",
+                            "index_version": version,
+                            "failure_count": int(state.get("failure_count", 0)) + 1,
+                        })
+                        continue
+                    self._mark_indexed(case_id, version)
+                    indexed += 1
                 continue
-            self._set_status(case_id, {
-                "status": "indexed",
-                "index_version": version,
-                "failure_count": 0,
-            })
-            indexed += 1
+            for case, _state in batch:
+                self._mark_indexed(int(case["CaseMasterID"]), version)
+                indexed += 1
         return IndexJobResult(
             index_version=version,
             indexed=indexed,
@@ -143,6 +165,13 @@ class IndexJob:
             retried_failed=retried,
             failures=tuple(failures),
         )
+
+    def _mark_indexed(self, case_id, version):
+        self._set_status(case_id, {
+            "status": "indexed",
+            "index_version": version,
+            "failure_count": 0,
+        })
 
     def _set_status(self, case_id, state):
         setter = getattr(self.status, "set", None)
@@ -156,6 +185,12 @@ def index_cases(cases, provider, index, provider_name="quickml", now=None):
     rows = list(cases or ())
     texts = [normalize_narrative(row.get("BriefFacts", "")).normalized for row in rows]
     vectors = provider.embed_documents(texts) if texts else []
+    try:
+        vector_count = len(vectors)
+    except TypeError:
+        raise ValueError("embedding vector count is invalid")
+    if vector_count != len(rows):
+        raise ValueError("embedding vector count mismatch")
     timestamp = now or dt.datetime.now(dt.timezone.utc).isoformat()
     records = [EmbeddingRecord(
         case_id=int(row["CaseMasterID"]), crime_no=row["CrimeNo"],
