@@ -89,6 +89,14 @@ def principal_from_user(user, employee_mapping, service_mapping=None):
     return None
 
 
+def normalize_route_path(path):
+    """Normalize the known Catalyst function prefix for route dispatch."""
+    route = str(path or "").split("?", 1)[0].rstrip("/") or "/"
+    if route.startswith("/server/silent_match/"):
+        return route[len("/server/silent_match"):]
+    return route
+
+
 def configured_identity_mapping(environ=None):
     raw = (environ or os.environ).get("KSP_AUTH_EMPLOYEE_MAP", "")
     if not raw:
@@ -114,14 +122,12 @@ def configured_service_mapping(environ=None):
 def principal_allowed_for_route(kind, method, path):
     """Keep service identities on bounded maintenance/job routes only."""
     if kind == "service":
-        route = str(path or "").split("?", 1)[0].rstrip("/") or "/"
+        route = normalize_route_path(path)
         # Catalyst may expose an Advanced I/O route as either ``/index`` or
         # ``/server/silent_match/index`` depending on whether the request
         # arrived through the function endpoint or API Gateway. Normalize only
         # this known function prefix; the allowlist remains exact for the
         # operation itself and never authorizes interactive routes.
-        if route.startswith("/server/silent_match/"):
-            route = route[len("/server/silent_match"):]
         return (method, route) in {
             ("POST", "/index"),
             ("POST", "/scan"),

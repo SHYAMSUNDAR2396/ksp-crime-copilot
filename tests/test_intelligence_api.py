@@ -87,6 +87,26 @@ def test_analytics_operation_is_capability_gated(tmp_path):
     db.close()
 
 
+def test_intelligence_task_graph_receives_server_deadline(tmp_path, monkeypatch):
+    db = _db(tmp_path)
+    captured = {}
+    original = intelligence_api.supervisor.build_task_context
+
+    def build_task_context(*args, **kwargs):
+        captured["deadline"] = kwargs["deadline"]
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(intelligence_api.supervisor, "build_task_context", build_task_context)
+    result = handle_operation({
+        "employee_id": 9,
+        "operation": "analytics",
+    }, db, dt.date(2026, 7, 22))
+
+    assert result["refused"] is False
+    assert captured["deadline"].tzinfo is not None
+    db.close()
+
+
 def test_unknown_operation_fails_without_case_data(tmp_path):
     db = _db(tmp_path)
     result = handle_operation({

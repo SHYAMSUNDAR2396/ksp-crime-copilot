@@ -11,7 +11,7 @@ pending an authenticated project run.
 |---|---:|---:|---|
 | SQL execution accuracy (30 labelled questions) | 100.0% | ≥ 85% | PASS |
 | Unsupported CrimeNo hallucination rate | 0.0% | 0% | PASS |
-| Local p95 end-to-end latency | 0.018s | < 8s | PASS |
+| Local p95 end-to-end latency | 0.020s | < 8s | PASS |
 | Backup replay beats | 9/9 | 9/9 | PASS |
 
 ## Live measurement gate
@@ -20,8 +20,6 @@ pending an authenticated project run.
 - Kannada/English parity and real speech recognition: pending live voice test.
 - Live p95 latency, specialist completion, and alert deduplication: pending
   Catalyst Job Scheduling and smoke execution.
-- QuickML aggregate forecasting/anomaly provider: pending endpoint provisioning;
-  deterministic geographic/temporal moving-average fallback remains enabled.
 - The checked-in deployment configuration intentionally leaves the RAG and
   multilingual embedding endpoints blank until the account-side endpoints
   are provisioned.

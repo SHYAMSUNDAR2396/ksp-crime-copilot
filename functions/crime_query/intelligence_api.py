@@ -274,6 +274,7 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
         request_id=str(payload.get("request_id") or "intelligence"),
         task_type=task_type,
         access_context=context,
+        deadline=supervisor.task_deadline(),
     )
     now = dt.datetime.combine(today or dt.date.today(), dt.time(0, 0))
     selection = policy_audit.record_agent_selection(task, (), outcome="selected")

@@ -149,14 +149,44 @@ def _distance_km(left, right):
     return 6371.0 * 2 * math.atan2(math.sqrt(value), math.sqrt(max(0.0, 1 - value)))
 
 
+def _spatial_neighbors(points, eps_km):
+    """Return exact DBSCAN neighbours using a bounded geographic grid.
+
+    Karnataka-scale coordinates are indexed in latitude/longitude cells
+    roughly one epsilon wide. The longitude search spans two cells because a
+    degree of longitude is shorter than a degree of latitude away from the
+    equator. Exact haversine distance remains the final predicate, so the grid
+    only removes impossible pairs and does not change clustering semantics.
+    """
+    if eps_km < 0:
+        return {index: () for index in range(len(points))}
+    cell_degrees = max(float(eps_km) / 111.0, 1e-9)
+    buckets = defaultdict(list)
+    cells = []
+    for index, (latitude, longitude) in enumerate(points):
+        cell = (int(math.floor(latitude / cell_degrees)),
+                int(math.floor(longitude / cell_degrees)))
+        cells.append(cell)
+        buckets[cell].append(index)
+
+    result = {}
+    for index, (latitude, longitude) in enumerate(points):
+        row, column = cells[index]
+        candidates = set()
+        for row_delta in (-1, 0, 1):
+            for column_delta in (-2, -1, 0, 1, 2):
+                candidates.update(buckets.get((row + row_delta, column + column_delta), ()))
+        result[index] = tuple(
+            other for other in sorted(candidates)
+            if _distance_km((latitude, longitude), points[other]) <= eps_km
+        )
+    return result
+
+
 def dbscan_hotspots(cases, eps_km=0.5, min_samples=3):
     rows = [row for row in cases or () if row.get("latitude") is not None and row.get("longitude") is not None]
     points = [(float(row["latitude"]), float(row["longitude"])) for row in rows]
-    neighbors = {
-        index: tuple(other for other, point in enumerate(points)
-                     if _distance_km(points[index], point) <= eps_km)
-        for index in range(len(points))
-    }
+    neighbors = _spatial_neighbors(points, eps_km)
     visited, clusters = set(), []
     for start in range(len(rows)):
         if start in visited or len(neighbors[start]) < min_samples:

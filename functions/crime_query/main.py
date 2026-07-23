@@ -137,6 +137,7 @@ def handle_question(payload, db, llm, translator, today):
         request_id=str(payload.get("request_id") or uuid.uuid4()),
         task_type=_task_type(payload),
         access_context=access_context,
+        deadline=supervisor.task_deadline(),
     )
     policy_record = policy_audit.record_agent_selection(task, (), outcome="selected")
     policy_audit.persist_record(db, policy_record, _audit_now(today))

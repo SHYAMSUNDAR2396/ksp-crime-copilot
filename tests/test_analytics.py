@@ -22,6 +22,33 @@ def test_trend_rollup_and_hotspot_preserve_crime_citations():
     assert hotspot.citations == ("FIR/1", "FIR/2", "FIR/3")
 
 
+def test_dbscan_uses_spatial_candidates_instead_of_all_pairs(monkeypatch):
+    rows = [
+        {"CaseMasterID": 1, "CrimeNo": "FIR/1", "latitude": 12.97, "longitude": 77.59},
+        {"CaseMasterID": 2, "CrimeNo": "FIR/2", "latitude": 12.9701, "longitude": 77.5901},
+        {"CaseMasterID": 3, "CrimeNo": "FIR/3", "latitude": 12.9702, "longitude": 77.5902},
+    ]
+    rows.extend(
+        {"CaseMasterID": index, "CrimeNo": "FIR/{}".format(index),
+         "latitude": 10 + index * 0.02, "longitude": 77.0}
+        for index in range(4, 104)
+    )
+    from functions.crime_query import analytics
+
+    calls = []
+    original = analytics._distance_km
+
+    def distance(left, right):
+        calls.append((left, right))
+        return original(left, right)
+
+    monkeypatch.setattr(analytics, "_distance_km", distance)
+    hotspots = dbscan_hotspots(rows, eps_km=0.5, min_samples=2)
+
+    assert hotspots[0].citations == ("FIR/1", "FIR/2", "FIR/3")
+    assert len(calls) < 1000
+
+
 def test_warning_is_aggregate_only_and_prevention_brief_has_no_person_score():
     assert forecast_next_period([2, 2, 4])["forecast"] == pytest.approx(8 / 3, rel=1e-3)
     warning = early_warning([2, 2, 5], threshold_ratio=1.1, window=1)

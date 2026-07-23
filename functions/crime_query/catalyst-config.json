@@ -7,6 +7,7 @@
 			"QUICKML_ENDPOINT": "https://api.catalyst.zoho.in/quickml/v1/project/48091000000038006/glm/chat",
 			"QUICKML_MODEL": "crm-di-glm47b_30b_it",
 			"QUICKML_ORG_ID": "60075198995",
+			"KSP_TASK_DEADLINE_MS": "8000",
 			"SMARTBROWZ_ENDPOINT": "https://api.catalyst.zoho.in/browser360/v1/project/48091000000038006/convert",
 			"QUICKML_RAG_ENDPOINT": "",
 			"QUICKML_RAG_MODEL": "brief-facts-rag-v1",

@@ -104,6 +104,14 @@ Operational tables such as `AuditLog` are deliberately absent from the
 NL-to-ZCQL catalog. Local SQLite remains a deterministic test adapter only;
 the live smoke tests below are required to verify Catalyst relationship setup.
 
+## Request deadline
+
+KSP_TASK_DEADLINE_MS is deployment-owned and defaults to 8000 in the checked-in
+function configuration. The supervisor clamps it to a safe range of 100 to
+60,000 ms; browser payloads cannot extend it. Tune it only after measuring the
+live specialist and composition latency, then rerun the full smoke contract to
+confirm that timeout responses remain bounded and redacted.
+
 ## 1. Task 2 — confirm the ZCQL/Data Store call surface — DONE
 
 `functions/crime_query/db.py`'s `ZcqlDB` class assumed specific SDK method

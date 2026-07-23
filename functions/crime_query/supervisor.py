@@ -1,6 +1,7 @@
 """Capability-gated supervisor DTOs and specialist selection."""
 
 import datetime as dt
+import os
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping, Optional, Tuple
@@ -12,6 +13,27 @@ except ImportError:
 
 
 POLICY_VERSION = "access-policy-v1"
+DEFAULT_TASK_DEADLINE_MS = 8000
+MAX_TASK_DEADLINE_MS = 60000
+
+
+def task_deadline(environ=None, now=None):
+    """Return a server-owned, bounded deadline for one task graph.
+
+    The browser cannot extend a request's execution budget. Deployment may
+    tune the value for measured Catalyst latency, but malformed or excessive
+    configuration falls back/clamps to a safe upper bound.
+    """
+    values = environ if environ is not None else os.environ
+    try:
+        configured = int(values.get("KSP_TASK_DEADLINE_MS", DEFAULT_TASK_DEADLINE_MS))
+    except (AttributeError, TypeError, ValueError):
+        configured = DEFAULT_TASK_DEADLINE_MS
+    milliseconds = max(100, min(MAX_TASK_DEADLINE_MS, configured))
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    return current + dt.timedelta(milliseconds=milliseconds)
 
 
 @dataclass(frozen=True)

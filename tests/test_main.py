@@ -38,6 +38,24 @@ def test_english_question_returns_answer_sql_and_citations(db):
     assert result["evidence"]["citations"] == result["citations"]
 
 
+def test_question_task_graph_receives_server_deadline(db, monkeypatch):
+    captured = {}
+    original = main.supervisor.build_task_context
+
+    def build_task_context(*args, **kwargs):
+        captured["deadline"] = kwargs["deadline"]
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(main.supervisor, "build_task_context", build_task_context)
+    result = main.handle_question(
+        {"employee_id": 9, "question": "recent cases"},
+        db, FakeLLM([SQL, "Two cases found."]), translate.NullTranslator(), TODAY,
+    )
+
+    assert result["refused"] is False
+    assert captured["deadline"].tzinfo is not None
+
+
 def test_result_cap_is_explicitly_marked_partial(db):
     capped_sql = (
         "SELECT CaseMaster.CrimeNo FROM CaseMaster "

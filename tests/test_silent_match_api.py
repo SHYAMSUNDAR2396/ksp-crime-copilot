@@ -291,6 +291,19 @@ def test_catalyst_request_adapter_delegates_method_path_and_json():
     assert body["run_id"] == "run-1"
 
 
+def test_catalyst_request_adapter_normalizes_function_gateway_prefix():
+    class Request:
+        method = "POST"
+        path = "/server/silent_match/scan/"
+
+        def get_json(self, silent=True):
+            return {"employee_id": 9, "anchor_case_id": 1, "trigger_source": "live"}
+
+    body, status = handle_request(Request(), api())
+    assert status == 200
+    assert body["run_id"] == "run-1"
+
+
 def test_scan_uses_request_access_context_factory():
     class ContextScanner(Scanner):
         pass
