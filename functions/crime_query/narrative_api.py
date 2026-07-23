@@ -141,7 +141,7 @@ def handle_operation(payload, db, retriever=None, today=None):
         {"Narrative Retrieval Agent": lambda _task, _payload: _evidence_bundle(hits, limitations)},
         payload={"question": question},
         composer=lambda _merged, _payload: data,
-        parallel=False,
+        parallel=supervisor_runtime.parallel_for_backend(db),
     )
     if not graph_result.complete:
         return _refused(

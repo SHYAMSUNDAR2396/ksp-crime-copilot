@@ -387,9 +387,8 @@ def _handle_operation(payload, db, today=None):
     graph_result = supervisor_runtime.execute_task_graph(
         task, handlers, payload={"operation": operation},
         composer=lambda _merged, _payload: data,
-        # SqliteDB is thread-bound; Catalyst deployment maps these groups to
-        # isolated Functions/Circuits for parallel fan-out.
-        parallel=False,
+        # SqliteDB is thread-bound; Catalyst ZCQL uses bounded fan-out.
+        parallel=supervisor_runtime.parallel_for_backend(db),
     )
     if not graph_result.complete:
         return _refused(

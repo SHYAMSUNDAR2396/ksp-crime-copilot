@@ -33,6 +33,17 @@ AGENT_CONTRACT_INVALID = "AGENT_CONTRACT_INVALID"
 COMPOSITION_UNAVAILABLE = "COMPOSITION_UNAVAILABLE"
 
 
+def parallel_for_backend(db):
+    """Select safe fan-out mode for the injected persistence adapter.
+
+    ``SqliteDB`` owns a thread-bound connection and must remain inline. The
+    Catalyst ``ZcqlDB`` adapter has no thread-bound connection and uses the
+    bounded worker path, which is the deployment equivalent of specialist
+    Function fan-out while retaining one request-scoped deadline.
+    """
+    return not hasattr(db, "_conn")
+
+
 @dataclass(frozen=True)
 class AgentRun:
     agent_name: str

@@ -51,9 +51,10 @@ specialist receives the caller's immutable access context and returns a typed
 `EvidenceBundle`; no model output can widen scope or bypass verification.
 
 The local SQLite adapter runs the same graph inline because its connection is
-thread-bound. Catalyst deployments should map independent specialist groups
-to isolated Catalyst Function fan-out or Circuits, where the runtime contract
-supports bounded parallel execution.
+thread-bound. The Catalyst ZCQL adapter selects the bounded parallel path for
+independent specialists. If the account provisions separate specialist
+Functions or Circuits, their handlers can be injected behind the same
+`EvidenceBundle` contract without changing authorization or composition.
 
 Proactive case processing follows a separate event/job path:
 

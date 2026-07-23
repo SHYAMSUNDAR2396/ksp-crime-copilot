@@ -3,7 +3,9 @@ import time
 
 from functions.crime_query.evidence import EvidenceBundle
 from functions.crime_query.supervisor import build_task_context
-from functions.crime_query.supervisor_runtime import execute_task_graph
+from functions.crime_query.supervisor_runtime import (
+    execute_task_graph, parallel_for_backend,
+)
 from functions.crime_query.access import AccessContext
 
 
@@ -209,3 +211,14 @@ def test_total_deadline_is_applied_to_composition_budget():
     assert result.composition is None
     composition_run = next(run for run in result.runs if run.agent_name == "Composition Agent")
     assert composition_run.error_code == "AGENT_TIMEOUT"
+
+
+def test_parallel_backend_selection_keeps_sqlite_inline_and_catalyst_parallel():
+    class SqliteLike:
+        _conn = object()
+
+    class CatalystLike:
+        pass
+
+    assert parallel_for_backend(SqliteLike()) is False
+    assert parallel_for_backend(CatalystLike()) is True

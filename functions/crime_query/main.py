@@ -197,9 +197,8 @@ def handle_question(payload, db, llm, translator, today):
         payload={"question": english_question},
         composer=compose_handler,
         # SqliteDB is deliberately thread-bound for deterministic local
-        # tests. Catalyst deployments fan out isolated specialists through
-        # Functions/Circuits; the shared local adapter runs inline.
-        parallel=False,
+        # tests; the Catalyst ZCQL adapter uses bounded specialist fan-out.
+        parallel=supervisor_runtime.parallel_for_backend(db),
     )
     result = graph_result.composition
     if not isinstance(result, agent.Answer):

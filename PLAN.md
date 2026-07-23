@@ -177,8 +177,9 @@ bounded by per-agent timeouts and retry budgets, failures are reduced to stable
 codes, the task deadline is propagated into specialist and composition waits,
 and composition runs only after the merged evidence envelope. The
 SQLite adapter uses inline execution because its connection is thread-bound;
-Catalyst deployments should map independent groups to isolated Function or
-Circuit invocations for parallel fan-out.
+the Catalyst ZCQL adapter selects the bounded parallel path, while an account
+with separately deployed specialist Functions/Circuits can replace those
+handlers without changing the evidence contract.
 
 The nine-beat disconnected backup is executable through
 `tools/demo_replay.py`; it writes the synthetic, redacted transcript at
