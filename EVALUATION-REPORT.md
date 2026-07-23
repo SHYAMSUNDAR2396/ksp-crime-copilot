@@ -15,7 +15,8 @@
 > Catalyst-backend bounded fan-out selection, per-series analytics warnings, and
 > the replay/evaluation artifacts, the root Catalyst deployment manifest, and
 > the standalone silent-match vendor preparation and validated analytics
-> provider fallback, and scope-checked clickable case citations. The local suite currently passes 447 tests, the nine-beat
+> provider fallback, scope-checked clickable case citations, and redacted
+> supervisor telemetry. The local suite currently passes 448 tests, the nine-beat
 > deterministic backup replay
 > passes 9/9, and the labelled offline contract baseline passes 30/30. Live
 > production readiness remains

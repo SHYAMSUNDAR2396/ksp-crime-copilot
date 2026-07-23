@@ -74,6 +74,16 @@ scoped retrieval contract before raising this limit. The local deterministic
 retriever remains the explicit rehearsal fallback while the live endpoint is
 blank.
 
+## Operational telemetry
+
+Every supervisor task graph emits one structured `task_graph_metric` log
+record. It contains task type, completion state, specialist name, retry count,
+elapsed milliseconds, and stable failure codes. It deliberately excludes
+questions, case narratives, names, and `CrimeNo` values. Configure Catalyst
+log retention/forwarding for p95 latency, specialist completion rate, timeout
+rate, and provider failure dashboards; do not use the audit table as a metrics
+warehouse.
+
 For silent-match scans, keep `KSP_SILENT_MATCH_LOOKBACK_DAYS` explicitly set
 in `silent_match/catalyst-config.json` (default `365`). Batch anchors scan the
 requested date window while candidates are limited to that window plus the

@@ -21,9 +21,11 @@ from typing import Callable, Mapping, Optional, Tuple
 
 try:
     from .evidence import EvidenceBundle, merge_bundles
+    from .observability import emit_task_graph_metric
     from .supervisor import AGENT_SPECS, TaskContext
 except ImportError:  # pragma: no cover
     from evidence import EvidenceBundle, merge_bundles
+    from observability import emit_task_graph_metric
     from supervisor import AGENT_SPECS, TaskContext
 
 
@@ -330,7 +332,7 @@ def execute_task_graph(
         )
 
     composition_failed_agents = ("Composition Agent",) if composition_failed else ()
-    return TaskGraphResult(
+    result = TaskGraphResult(
         task_id=task.request_id,
         merged_evidence=merged,
         runs=tuple(runs),
@@ -338,3 +340,5 @@ def execute_task_graph(
         complete=not required_failed and not composition_failed,
         composition=composition,
     )
+    emit_task_graph_metric(task, result)
+    return result
