@@ -142,3 +142,27 @@ def test_task_graph_honors_expired_total_deadline_before_dispatch():
     assert called == []
     assert result.complete is False
     assert result.runs[0].error_code == "AGENT_TIMEOUT"
+
+
+def test_composition_timeout_is_reported_and_does_not_claim_completion():
+    task = build_task_context("request-6", "structured_query", _context(("query_structured_cases",)))
+
+    def slow_composer(_merged, _payload):
+        time.sleep(0.08)
+        return "late answer"
+
+    result = execute_task_graph(
+        task,
+        {"Structured Query Agent": lambda *_args: _bundle(
+            "Structured Query Agent", "111111111111111111", "ok",
+        )},
+        composer=slow_composer,
+        timeout_override_ms=10,
+        parallel=False,
+    )
+
+    assert result.complete is False
+    assert result.composition is None
+    assert "Composition Agent" in result.failed_agents
+    composition_run = next(run for run in result.runs if run.agent_name == "Composition Agent")
+    assert composition_run.error_code == "AGENT_TIMEOUT"

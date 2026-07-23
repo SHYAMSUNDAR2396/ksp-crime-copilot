@@ -178,6 +178,47 @@ def _deadline_expired(task):
     return now >= deadline
 
 
+def _run_composition(task, composer, merged, payload, timeout_override_ms, parallel):
+    """Run composition with the same bounded contract as specialists.
+
+    SQLite's connection is thread-bound, so inline mode measures and rejects
+    an over-budget composition after it returns. Catalyst/parallel mode uses
+    an isolated worker and returns at the deadline without waiting for a
+    provider call that cannot be cancelled locally.
+    """
+    timeout_ms = timeout_override_ms or AGENT_SPECS["Composition Agent"].timeout_ms
+    started = dt.datetime.now(dt.timezone.utc)
+    if _deadline_expired(task):
+        return None, AgentRun("Composition Agent", "failed", 0, 0, AGENT_TIMEOUT)
+
+    if not parallel:
+        try:
+            composition = composer(merged, payload)
+        except Exception:
+            return None, AgentRun("Composition Agent", "failed", 1, 0, COMPOSITION_UNAVAILABLE)
+        elapsed = int(max(0.0, (dt.datetime.now(dt.timezone.utc) - started).total_seconds()) * 1000)
+        if elapsed > timeout_ms:
+            return None, AgentRun("Composition Agent", "failed", 1, elapsed, AGENT_TIMEOUT)
+        return composition, AgentRun("Composition Agent", "completed", 1, elapsed)
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(composer, merged, payload)
+    try:
+        try:
+            composition = future.result(timeout=timeout_ms / 1000.0)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            elapsed = int(max(0.0, (dt.datetime.now(dt.timezone.utc) - started).total_seconds()) * 1000)
+            return None, AgentRun("Composition Agent", "failed", 1, elapsed, AGENT_TIMEOUT)
+        except Exception:
+            elapsed = int(max(0.0, (dt.datetime.now(dt.timezone.utc) - started).total_seconds()) * 1000)
+            return None, AgentRun("Composition Agent", "failed", 1, elapsed, COMPOSITION_UNAVAILABLE)
+        elapsed = int(max(0.0, (dt.datetime.now(dt.timezone.utc) - started).total_seconds()) * 1000)
+        return composition, AgentRun("Composition Agent", "completed", 1, elapsed)
+    finally:
+        executor.shutdown(wait=False)
+
+
 def execute_task_graph(
     task: TaskContext,
     handlers: Mapping[str, Callable],
@@ -227,16 +268,11 @@ def execute_task_graph(
     composition = None
     composition_failed = False
     if "Composition Agent" in task.selected_agents and composer is not None:
-        started = dt.datetime.now(dt.timezone.utc)
-        try:
-            composition = composer(merged, payload)
-            elapsed = int(max(0.0, (dt.datetime.now(dt.timezone.utc) - started).total_seconds()) * 1000)
-            runs.append(AgentRun("Composition Agent", "completed", 1, elapsed))
-        except Exception:
-            composition_failed = True
-            runs.append(AgentRun(
-                "Composition Agent", "failed", 1, 0, COMPOSITION_UNAVAILABLE,
-            ))
+        composition, composition_run = _run_composition(
+            task, composer, merged, payload, timeout_override_ms, parallel,
+        )
+        composition_failed = composition_run.status != "completed"
+        runs.append(composition_run)
 
     limitations = list(merged.limitations)
     if required_failed:
@@ -250,11 +286,12 @@ def execute_task_graph(
             limitations=tuple(dict.fromkeys(limitations)),
         )
 
+    composition_failed_agents = ("Composition Agent",) if composition_failed else ()
     return TaskGraphResult(
         task_id=task.request_id,
         merged_evidence=merged,
         runs=tuple(runs),
-        failed_agents=tuple(dict.fromkeys(failed + required_failed)),
+        failed_agents=tuple(dict.fromkeys(failed + required_failed + composition_failed_agents)),
         complete=not required_failed and not composition_failed,
         composition=composition,
     )
