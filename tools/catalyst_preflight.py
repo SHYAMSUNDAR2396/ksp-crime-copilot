@@ -123,8 +123,16 @@ def _project_config(root):
     targets = functions.get("targets")
     if targets != ["crime_query", "silent_match"]:
         return False, "function targets must match the two deployed functions"
-    if not (root / str(client.get("source", ""))).is_dir():
+    client_source = root / str(client.get("source", ""))
+    if not client_source.is_dir():
         return False, "client source directory is missing"
+    required_client_assets = ("index.html", "app.js", "styles.css")
+    missing_assets = tuple(
+        name for name in required_client_assets
+        if not (client_source / name).is_file()
+    )
+    if missing_assets:
+        return False, "client assets are missing: {}".format(", ".join(missing_assets))
     return True, "functions and web client targets configured"
 
 

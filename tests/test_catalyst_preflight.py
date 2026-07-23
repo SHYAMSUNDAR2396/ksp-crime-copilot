@@ -1,10 +1,24 @@
 import json
 from pathlib import Path
 
-from tools.catalyst_preflight import run_preflight
+from tools.catalyst_preflight import _project_config, run_preflight
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_project_config_rejects_incomplete_web_client(tmp_path):
+    (tmp_path / "web").mkdir()
+    (tmp_path / "web/index.html").write_text("<!doctype html>")
+    (tmp_path / "catalyst.json").write_text(json.dumps({
+        "functions": {"source": "functions", "targets": ["crime_query", "silent_match"]},
+        "client": {"source": "web"},
+    }))
+
+    ok, detail = _project_config(tmp_path)
+
+    assert ok is False
+    assert "client assets" in detail
 
 
 def test_local_preflight_passes_structure_and_reports_live_warnings():
@@ -83,6 +97,8 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
     (root / "functions/crime_query/requirements.txt").write_text("zcatalyst-sdk==1.3.0\n")
     (root / "functions/silent_match/requirements.txt").write_text("zcatalyst-sdk==1.3.0\n")
     (root / "web").mkdir()
+    for asset in ("index.html", "app.js", "styles.css"):
+        (root / "web" / asset).write_text("client asset")
     (root / "catalyst.json").write_text(json.dumps({
         "functions": {
             "targets": ["crime_query", "silent_match"],
