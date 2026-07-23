@@ -132,7 +132,7 @@ flowchart LR
 | QuickML analytics provider | Optional aggregate time-series forecast/anomaly enhancement; deterministic DBSCAN and moving-average fallbacks remain local |
 | Zia | Language detect/normalise, OCR for legacy scans, voice STT fallback |
 | SmartBrowz | Conversation history → PDF |
-| Data Store | 23 schema tables + derived edge tables + MO index + silent-match alerts + append-only audit log |
+| Data Store | 26 schema tables + derived edge tables + MO index + silent-match alerts + append-only audit log |
 | Cache | Per-session conversation context for follow-ups |
 | Stratus | Blob/PDF storage |
 | Cron / Job Scheduling | Edge-table rebuild, MO index refresh, batch alert scans, and forecast refresh |

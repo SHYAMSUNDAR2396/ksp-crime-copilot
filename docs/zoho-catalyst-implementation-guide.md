@@ -199,6 +199,9 @@ authenticated Catalyst project:
 - Cache session ownership prevents cross-employee transcript access.
 - SmartBrowz export returns a verified PDF or the documented safe HTML fallback.
 - Similar-case retrieval never embeds an inaccessible narrative.
+- Narrative RAG sends at most `QUICKML_RAG_MAX_DOCUMENTS` authorized one-case
+  documents per request and fails closed on an oversized scope; it preserves
+  the original `BriefFacts` string for citations after the provider response.
 - Batch/live scans produce identical evidence for identical fixtures and repeat
   runs update, rather than duplicate, alerts.
 - Graph edges carry source IDs, confidence, and provenance.

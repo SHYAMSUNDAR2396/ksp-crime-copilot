@@ -112,16 +112,19 @@ class QuickMLRagProvider:
     """
 
     def __init__(self, endpoint, token, org_id, model="brief-facts-rag-v1",
-                 timeout=10, transport=None):
+                 timeout=10, max_documents=500, transport=None):
         if not endpoint:
             raise ValueError("narrative endpoint is required")
         if timeout <= 0:
             raise ValueError("narrative timeout must be positive")
+        if max_documents <= 0:
+            raise ValueError("narrative document limit must be positive")
         self.endpoint = endpoint
         self.token = token
         self.org_id = org_id
         self.model = model
         self.timeout = timeout
+        self.max_documents = int(max_documents)
         self.transport = transport or (requests.Session() if requests else None)
         if self.transport is None:
             raise NarrativeRetrievalError("HTTP transport is unavailable")
@@ -130,12 +133,16 @@ class QuickMLRagProvider:
     def search(self, question, cases, context, limit=5):
         require_capability(context, "retrieve_narratives")
         visible = _visible(context, cases)
-        documents = [
-            {"case_id": int(case["CaseMasterID"]), "crime_no": case["CrimeNo"],
-             "text": str(case.get("BriefFacts") or "")}
-            for case in visible if case.get("BriefFacts") and case.get("CrimeNo")
-        ]
-        allowed = {item["case_id"]: item for item in documents}
+        eligible = tuple(
+            case for case in visible if case.get("BriefFacts") and case.get("CrimeNo")
+        )
+        documents = [_document(case) for case in eligible]
+        if len(documents) > self.max_documents:
+            raise NarrativeRetrievalError("QuickML narrative document limit exceeded")
+        allowed = {
+            int(case["CaseMasterID"]): (document, str(case.get("BriefFacts") or ""))
+            for case, document in zip(eligible, documents)
+        }
         payload = {"query": str(question), "documents": documents,
                    "top_k": min(max(int(limit), 1), 10), "model": self.model}
         headers = {"Content-Type": "application/json"}
@@ -162,10 +169,10 @@ class QuickMLRagProvider:
                 score = float(match.get("score", 0.0))
             except (KeyError, TypeError, ValueError):
                 raise NarrativeRetrievalError("QuickML narrative match is invalid")
-            document = allowed.get(case_id)
-            if document is None:
+            item = allowed.get(case_id)
+            if item is None:
                 raise NarrativeRetrievalError("QuickML returned an out-of-scope case")
-            excerpt = document["text"]
+            document, excerpt = item
             result.append(NarrativeHit(
                 case_id=case_id, crime_no=document["crime_no"], excerpt=excerpt,
                 score=max(0.0, min(1.0, score)),
@@ -174,3 +181,30 @@ class QuickMLRagProvider:
                 index_version=self.index_version,
             ))
         return tuple(result)
+
+
+def _document(case):
+    """Build the stable one-case BriefFacts contract sent to QuickML.
+
+    The metadata prefix lets a manually managed QuickML Knowledge Base retain
+    the citation keys required by the application.  ``NarrativeHit.excerpt``
+    still returns only the original BriefFacts value, never the prefix.
+    """
+    metadata = {
+        "CrimeNo": str(case["CrimeNo"]),
+        "CaseMasterID": int(case["CaseMasterID"]),
+        "DistrictID": case.get("DistrictID", ""),
+        "PoliceStationID": case.get("PoliceStationID", ""),
+        "CrimeRegisteredDate": case.get("CrimeRegisteredDate", "") or "",
+        "CrimeMajorHeadID": case.get("CrimeMajorHeadID", "") or "",
+        "CrimeMinorHeadID": case.get("CrimeMinorHeadID", "") or "",
+    }
+    prefix = "\n".join(
+        "{0}: {1}".format(key, value) for key, value in metadata.items()
+    )
+    return {
+        "case_id": metadata["CaseMasterID"],
+        "crime_no": metadata["CrimeNo"],
+        "metadata": metadata,
+        "text": prefix + "\nBriefFacts: " + str(case.get("BriefFacts") or ""),
+    }

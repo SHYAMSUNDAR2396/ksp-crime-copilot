@@ -55,6 +55,25 @@ the request body; identity comes only from the Catalyst principal and its
 server-side mapping. Service identities are limited to silent-match job
 routes.
 
+## QuickML RAG document contract
+
+QuickML's Knowledge Base is account-managed: the operator uploads or imports
+documents, and the RAG API exposes the endpoint, document selection, and OAuth
+scope from its **View API** panel. This repository does not invent an upload
+API. When the RAG endpoint is configured, the narrative adapter sends one
+scope-filtered `BriefFacts` document per case. Each document is prefixed with
+`CrimeNo`, `CaseMasterID`, district, station, crime-head IDs, and registered
+date; the response is mapped back to the original `BriefFacts` text before it
+is returned as a citation.
+
+`QUICKML_RAG_MAX_DOCUMENTS` defaults to `500`. A request whose authorized
+scope exceeds that limit fails closed, because silently truncating a police
+scope would produce misleading results. For larger deployments, provision a
+QuickML Knowledge Base/document-store partition and expose a corresponding
+scoped retrieval contract before raising this limit. The local deterministic
+retriever remains the explicit rehearsal fallback while the live endpoint is
+blank.
+
 For silent-match scans, keep `KSP_SILENT_MATCH_LOOKBACK_DAYS` explicitly set
 in `silent_match/catalyst-config.json` (default `365`). Batch anchors scan the
 requested date window while candidates are limited to that window plus the

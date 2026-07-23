@@ -72,6 +72,45 @@ def test_quickml_rag_provider_rejects_out_of_scope_case():
         provider.search("phone", _cases()[:1], _context())
 
 
+def test_quickml_rag_provider_sends_case_metadata_and_original_text():
+    transport = _Transport({"matches": [{"case_id": 1, "score": 0.9}]})
+    provider = QuickMLRagProvider(
+        "https://rag.example", "token", "org", transport=transport,
+    )
+
+    hits = provider.search("broken lock", _cases(), _context())
+
+    document = transport.calls[0]["json"]["documents"][0]
+    assert document["case_id"] == 1
+    assert document["crime_no"] == "1" * 18
+    assert document["metadata"] == {
+        "CaseMasterID": 1,
+        "CrimeNo": "1" * 18,
+        "DistrictID": 10,
+        "PoliceStationID": 1,
+        "CrimeRegisteredDate": "",
+        "CrimeMajorHeadID": "",
+        "CrimeMinorHeadID": "",
+    }
+    assert document["text"].startswith("CrimeNo: " + "1" * 18)
+    assert document["text"].endswith("BriefFacts: Broken lock and motorcycle stolen.")
+    assert hits[0].excerpt == "Broken lock and motorcycle stolen."
+
+
+def test_quickml_rag_provider_fails_closed_when_scope_exceeds_limit():
+    provider = QuickMLRagProvider(
+        "https://rag.example", "token", "org", max_documents=1,
+        transport=_Transport({"matches": []}),
+    )
+
+    wide_context = AccessContext(
+        9, 6, "CONSTABLE", (1, 2), (10,),
+        frozenset({"retrieve_narratives"}), "rbac_masked", frozenset(), "own_actions",
+    )
+    with pytest.raises(NarrativeRetrievalError, match="document limit"):
+        provider.search("theft", _cases(), wide_context)
+
+
 def test_narrative_retrieval_requires_capability():
     context = AccessContext(9, 6, "CONSTABLE", (1,), (10,), frozenset(),
                             "rbac_masked", frozenset(), "own_actions")

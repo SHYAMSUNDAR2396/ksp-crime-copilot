@@ -330,6 +330,7 @@ def _narrative_retriever(app):
         org_id=os.environ.get("QUICKML_ORG_ID"),
         model=os.environ.get("QUICKML_RAG_MODEL", "brief-facts-rag-v1"),
         timeout=float(os.environ.get("QUICKML_RAG_TIMEOUT", "10")),
+        max_documents=int(os.environ.get("QUICKML_RAG_MAX_DOCUMENTS", "500")),
     )
 
 
