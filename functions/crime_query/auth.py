@@ -114,7 +114,15 @@ def configured_service_mapping(environ=None):
 def principal_allowed_for_route(kind, method, path):
     """Keep service identities on bounded maintenance/job routes only."""
     if kind == "service":
-        return (method, path) in {
+        route = str(path or "").split("?", 1)[0].rstrip("/") or "/"
+        # Catalyst may expose an Advanced I/O route as either ``/index`` or
+        # ``/server/silent_match/index`` depending on whether the request
+        # arrived through the function endpoint or API Gateway. Normalize only
+        # this known function prefix; the allowlist remains exact for the
+        # operation itself and never authorizes interactive routes.
+        if route.startswith("/server/silent_match/"):
+            route = route[len("/server/silent_match"):]
+        return (method, route) in {
             ("POST", "/index"),
             ("POST", "/scan"),
             ("POST", "/graph-projection"),

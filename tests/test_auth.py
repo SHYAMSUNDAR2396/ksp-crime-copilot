@@ -91,8 +91,11 @@ def test_service_principal_is_restricted_to_job_routes():
     assert principal_allowed_for_route("service", "POST", "/index") is True
     assert principal_allowed_for_route("service", "POST", "/scan") is True
     assert principal_allowed_for_route("service", "POST", "/graph-projection") is True
+    assert principal_allowed_for_route("service", "POST", "/server/silent_match/index") is True
+    assert principal_allowed_for_route("service", "POST", "/server/silent_match/scan/") is True
     assert principal_allowed_for_route("service", "GET", "/alerts") is False
     assert principal_allowed_for_route("service", "POST", "/alerts/1/transition") is False
+    assert principal_allowed_for_route("service", "POST", "/server/silent_match/alerts") is False
     assert principal_allowed_for_route("user", "GET", "/alerts") is True
 
 
