@@ -5,10 +5,18 @@ try:
     from .access import ACTION_DENIED, CAPABILITY_DENIED, AccessPolicyError, can_act_on_alert, can_read_case_pair, require_capability
     from .db import DBError
     from .mo_embeddings import EmbeddingError
+    from ..silent_match.job_contracts import (
+        validate_graph_projection_payload, validate_index_payload,
+        validate_scan_payload,
+    )
 except ImportError:  # pragma: no cover
     from access import ACTION_DENIED, CAPABILITY_DENIED, AccessPolicyError, can_act_on_alert, can_read_case_pair, require_capability
     from db import DBError
     from mo_embeddings import EmbeddingError
+    from job_contracts import (
+        validate_graph_projection_payload, validate_index_payload,
+        validate_scan_payload,
+    )
 
 
 def _value(value):
@@ -104,16 +112,13 @@ class SilentMatchAPI:
 
     def scan(self, payload):
         context = self._context(payload.get("employee_id"))
-        trigger = payload.get("trigger_source", "batch")
-        if trigger not in ("batch", "live"):
-            raise ValueError("unsupported trigger source")
-        require_capability(context, "run_live_scan" if trigger == "live" else "run_batch_scan")
-        scanner = self.scanner_factory(context) if self.scanner_factory else self.scanner
-        result = scanner.scan(
-            date_window=payload.get("date_window"),
-            anchor_case_id=payload.get("anchor_case_id"),
-            trigger_source=trigger,
+        validated = validate_scan_payload(payload, reject_identity=False)
+        trigger = validated["trigger_source"]
+        require_capability(
+            context, "run_live_scan" if trigger == "live" else "run_batch_scan"
         )
+        scanner = self.scanner_factory(context) if self.scanner_factory else self.scanner
+        result = scanner.scan(**validated)
         return _value(result)
 
     def index(self, payload):
@@ -121,12 +126,9 @@ class SilentMatchAPI:
         require_capability(context, "run_batch_scan")
         if self.index_job_factory is None:
             raise ValueError("index job is not configured")
-        version = str(payload.get("index_version") or "").strip()
-        if not version or len(version) > 80 or not all(
-            character.isalnum() or character in "._-" for character in version
-        ):
-            raise ValueError("a valid index version is required")
-        job = self.index_job_factory(payload)
+        validated = validate_index_payload(payload, reject_identity=False)
+        job = self.index_job_factory(validated)
+        version = validated["index_version"]
         result = job.run(version)
         return _value(result)
 
@@ -135,12 +137,8 @@ class SilentMatchAPI:
         require_capability(context, "run_batch_scan")
         if self.graph_projection_job_factory is None:
             raise ValueError("graph projection job is not configured")
-        version = str(payload.get("projection_version") or "").strip()
-        if not version or len(version) > 80 or not all(
-            character.isalnum() or character in "._-" for character in version
-        ):
-            raise ValueError("a valid projection version is required")
-        job = self.graph_projection_job_factory(payload)
+        validated = validate_graph_projection_payload(payload, reject_identity=False)
+        job = self.graph_projection_job_factory(validated)
         return _value(job.run())
 
     def alert_detail(self, alert_id, payload):

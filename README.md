@@ -297,6 +297,7 @@ allowlist and sensitive dimensions remain rank-gated aggregate views.
 - [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md): live Catalyst setup, imports, deployment, smoke tests, and known gaps.
 - [`docs/zoho-catalyst-implementation-guide.md`](docs/zoho-catalyst-implementation-guide.md): implemented agent stack, Catalyst service map, feature contracts, deployment, and readiness checklist.
 - [`docs/silent-match-production-runbook.md`](docs/silent-match-production-runbook.md): MO index versioning, scan jobs, rollback, and live alert smoke tests.
+- [`docs/catalyst-job-contracts.json`](docs/catalyst-job-contracts.json): validated scheduled and post-ingestion job payload contracts.
 - [`docs/schema-ddl.sql`](docs/schema-ddl.sql): local SQLite/Catalyst-oriented DDL.
 - [`docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md`](docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md): provider-neutral chatbot/voice architecture, turn cancellation, stale-response protection, and rollout.
 - [`docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md`](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md): Kannada-English MO matching.

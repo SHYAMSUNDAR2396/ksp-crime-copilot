@@ -48,6 +48,5 @@ def handler(request):
         )
         else None
     )
-    payload["_principal_kind"] = kind
     status, body = api.handle(request.method, request.path, payload)
     return make_response(jsonify(body), status)

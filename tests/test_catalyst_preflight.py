@@ -107,6 +107,10 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
         }
     }
     (root / "docs/catalyst-security-rules.json").write_text(json.dumps(rules))
+    source_manifest = ROOT / "docs/catalyst-job-contracts.json"
+    (root / "docs/catalyst-job-contracts.json").write_text(
+        source_manifest.read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     report = run_preflight(root, require_live=True, catalyst_available=True)
     assert report["ok"] is True

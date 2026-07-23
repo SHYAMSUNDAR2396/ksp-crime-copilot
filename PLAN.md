@@ -193,6 +193,9 @@ Scheduled and post-ingestion invocations resolve through a separate Catalyst
 service-principal mapping and a dedicated policy-scope Employee row; they do
 not accept a browser `employee_id` or impersonate an officer session. Service
 principals are restricted to index, scan, and graph-projection job routes.
+The executable trigger contract is maintained in
+`docs/catalyst-job-contracts.json` and enforced by the runtime payload
+validators plus the offline Catalyst preflight.
 The future `Legal Deadline Agent` uses the same contract but is not part of the
 current committed feature set until its own spec is approved.
 

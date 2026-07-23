@@ -19,6 +19,11 @@ try:
 except ImportError:  # pragma: no cover - standalone Catalyst packaging
     TABLES = {}
 
+try:
+    from .catalyst_job_contracts import validate_manifest
+except ImportError:  # pragma: no cover - direct script execution
+    from catalyst_job_contracts import validate_manifest
+
 
 CANONICAL_TABLE_NAMES = (
     "CaseMaster", "ComplainantDetails", "ActSectionAssociation", "Victim",
@@ -215,6 +220,13 @@ def run_preflight(root, require_live=False, catalyst_available=None):
         check("silent_match_rule_{}".format(path.strip("/")),
               _security_rule(rules, "silent_match", path, methods),
               "authenticated route")
+
+    job_manifest = validate_manifest(root / "docs/catalyst-job-contracts.json")
+    check(
+        "job_contract_manifest",
+        job_manifest["ok"],
+        "validated scheduled and post-ingestion payload contracts",
+    )
 
     if catalyst_available is None:
         catalyst_available = shutil.which("catalyst") is not None

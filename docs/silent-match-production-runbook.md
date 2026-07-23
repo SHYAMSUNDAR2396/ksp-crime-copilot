@@ -13,6 +13,8 @@ matching and silent-match alerts. The implementation contract is in
 - `functions/silent_match/index_cases.py`: deterministic index-job contract.
 - `functions/silent_match/run_scan.py`: one scan contract for Job Scheduling
   and post-ingestion triggers.
+- [`catalyst-job-contracts.json`](catalyst-job-contracts.json): executable
+  route, payload, identity, and bounded-retry manifest for those triggers.
 - `functions/crime_query/graph_projection.py`: versioned relationship-graph
   projection job for `PersonNode`, `PersonMember`, and the derived edge tables.
 - `MoEmbeddingRecord`: versioned operational records; old model/index versions
@@ -66,6 +68,17 @@ eligibility therefore joins `Employee` to `Rank` and requires
 must not be invented in the deployment schema.
 
 ## Job contracts
+
+Validate the checked-in trigger manifest before deployment:
+
+```bash
+python -m tools.catalyst_job_contracts
+```
+
+The runtime validators reject malformed dates, reversed windows, non-positive
+IDs, duplicate/oversized changed-case lists, unsafe version identifiers, and
+client-supplied `employee_id` fields. Malformed payloads are not retryable;
+provider/Data Store failures remain bounded by the manifest retry policy.
 
 The job adapter receives one of these payloads after authentication and input
 validation:
