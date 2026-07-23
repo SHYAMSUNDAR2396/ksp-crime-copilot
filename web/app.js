@@ -18,8 +18,8 @@
   function renderNetwork(data, result) {
     intelligenceOutput.textContent = "";
     const summary = document.createElement("p");
-    summary.textContent = "Evidence: " + result.evidence.status +
-      " · citations: " + ((result.citations || []).join(", ") || "none");
+    summary.appendChild(document.createTextNode("Evidence: " + result.evidence.status + " · citations: "));
+    appendCitationLinks(summary, result.citations || []);
     intelligenceOutput.appendChild(summary);
     const graph = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     graph.setAttribute("class", "network-graph");
@@ -88,8 +88,8 @@
   function renderCaseDetail(data, result) {
     intelligenceOutput.textContent = "";
     const summary = document.createElement("p");
-    summary.textContent = "Exact visible case evidence · " +
-      ((result.citations || []).join(", ") || "no citation");
+    summary.appendChild(document.createTextNode("Exact visible case evidence · "));
+    appendCitationLinks(summary, result.citations || []);
     intelligenceOutput.appendChild(summary);
     const table = document.createElement("table");
     table.className = "case-detail-table";
@@ -112,9 +112,10 @@
     intelligenceOutput.textContent = "";
     const summary = document.createElement("p");
     const warning = data.warning || {};
-    summary.textContent = "Evidence: " + result.evidence.status +
+    summary.appendChild(document.createTextNode("Evidence: " + result.evidence.status +
       " · warning: " + (warning.warning ? "above baseline" : "none") +
-      " · citations: " + ((result.citations || []).join(", ") || "none");
+      " · citations: "));
+    appendCitationLinks(summary, result.citations || []);
     intelligenceOutput.appendChild(summary);
     const hotspots = data.hotspots || [];
     if (hotspots.length) {
@@ -208,6 +209,17 @@
       loadCaseDetail(String(crimeNo || ""));
     });
     return button;
+  }
+
+  function appendCitationLinks(container, citations) {
+    if (!citations.length) {
+      container.appendChild(document.createTextNode("none"));
+      return;
+    }
+    citations.forEach(function (crimeNo, index) {
+      if (index) container.appendChild(document.createTextNode(", "));
+      container.appendChild(citationButton(crimeNo));
+    });
   }
 
   async function loadCaseDetail(crimeNo) {
@@ -413,10 +425,7 @@
       const cite = document.createElement("div");
       cite.className = "citations";
       cite.appendChild(document.createTextNode("Citations: "));
-      citations.forEach(function (crimeNo, index) {
-        if (index) cite.appendChild(document.createTextNode(", "));
-        cite.appendChild(citationButton(crimeNo));
-      });
+      appendCitationLinks(cite, citations);
       node.appendChild(cite);
     }
     conversation.appendChild(node);
