@@ -324,14 +324,20 @@ def _narrative_retriever(app):
     endpoint = os.environ.get("QUICKML_RAG_ENDPOINT", "").strip()
     if not endpoint:
         return None
-    return QuickMLRagProvider(
-        endpoint=endpoint,
-        token=_quickml_token(app),
-        org_id=os.environ.get("QUICKML_ORG_ID"),
-        model=os.environ.get("QUICKML_RAG_MODEL", "brief-facts-rag-v1"),
-        timeout=float(os.environ.get("QUICKML_RAG_TIMEOUT", "10")),
-        max_documents=int(os.environ.get("QUICKML_RAG_MAX_DOCUMENTS", "500")),
-    )
+    try:
+        return QuickMLRagProvider(
+            endpoint=endpoint,
+            token=_quickml_token(app),
+            org_id=os.environ.get("QUICKML_ORG_ID"),
+            model=os.environ.get("QUICKML_RAG_MODEL", "brief-facts-rag-v1"),
+            timeout=float(os.environ.get("QUICKML_RAG_TIMEOUT", "10")),
+            max_documents=int(os.environ.get("QUICKML_RAG_MAX_DOCUMENTS", "500")),
+        )
+    except (AttributeError, TypeError, ValueError):
+        # Preflight reports malformed deployment configuration; the request
+        # path keeps the deterministic narrative fallback rather than
+        # converting a configuration typo into a function error.
+        return None
 
 
 def _analytics_provider(app):

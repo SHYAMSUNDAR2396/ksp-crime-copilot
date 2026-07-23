@@ -63,6 +63,19 @@ def test_malformed_analytics_provider_configuration_uses_safe_fallback(monkeypat
     assert main._analytics_provider(App()) is None
 
 
+def test_malformed_rag_configuration_uses_deterministic_fallback(monkeypatch):
+    class Credential:
+        def token(self):
+            return "token"
+
+    class App:
+        credential = Credential()
+
+    monkeypatch.setenv("QUICKML_RAG_ENDPOINT", "https://rag.example")
+    monkeypatch.setenv("QUICKML_RAG_TIMEOUT", "not-a-number")
+    assert main._narrative_retriever(App()) is None
+
+
 def test_missing_question_is_rejected(db):
     result = main.handle_question(
         {"employee_id": 9}, db, FakeLLM([]), translate.NullTranslator(), TODAY
