@@ -11,7 +11,7 @@
 > demographic views, narrative retrieval, versioned graph projection,
 > supervisor task-graph execution, and cross-jurisdiction silent-match
 > indexing/scanning/alerts, and the replay/evaluation artifacts. The local
-> suite currently passes 416 tests, the nine-beat deterministic backup replay
+> suite currently passes 418 tests, the nine-beat deterministic backup replay
 > passes 9/9, and the labelled offline contract baseline passes 30/30. Live
 > production readiness remains
 > unverified until the Catalyst CLI/project credentials, principal mapping,

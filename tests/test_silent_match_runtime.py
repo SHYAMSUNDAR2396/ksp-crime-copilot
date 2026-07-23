@@ -1,6 +1,21 @@
 from functions.silent_match.runtime import CatalystCaseLoader, recipient_employee_ids
 from functions.crime_query.db import SqliteDB
+from functions.crime_query.mo_embeddings import EmbeddingError
 from tools import gen_data
+
+
+def test_missing_embedding_endpoint_creates_bounded_unavailable_provider(monkeypatch):
+    from functions.silent_match.runtime import build_embedding_provider
+
+    monkeypatch.delenv("QUICKML_EMBEDDINGS_ENDPOINT", raising=False)
+    provider = build_embedding_provider(object())
+
+    try:
+        provider.embed_documents(["narrative"])
+    except EmbeddingError as error:
+        assert str(error) == "multilingual embedding provider is unavailable"
+    else:
+        raise AssertionError("unconfigured embedding provider must fail closed")
 
 
 class DB:

@@ -5,7 +5,9 @@ import os
 try:
     from ..crime_query import access
     from ..crime_query.db import ZcqlDB
-    from ..crime_query.mo_embeddings import QuickMLMultilingualProvider
+    from ..crime_query.mo_embeddings import (
+        QuickMLMultilingualProvider, UnavailableEmbeddingProvider,
+    )
     from ..crime_query.mo_index import OperationalMoIndex
     from ..crime_query.mo_matcher import MoMatcher
     from ..crime_query.silent_match_api import SilentMatchAPI
@@ -16,7 +18,9 @@ try:
 except ImportError:  # pragma: no cover
     from functions.crime_query import access
     from functions.crime_query.db import ZcqlDB
-    from functions.crime_query.mo_embeddings import QuickMLMultilingualProvider
+    from functions.crime_query.mo_embeddings import (
+        QuickMLMultilingualProvider, UnavailableEmbeddingProvider,
+    )
     from functions.crime_query.mo_index import OperationalMoIndex
     from functions.crime_query.mo_matcher import MoMatcher
     from functions.crime_query.silent_match_api import SilentMatchAPI
@@ -259,17 +263,30 @@ def _token(app):
     return value[1] if isinstance(value, tuple) else value
 
 
-def build_api(app):
-    db = ZcqlDB(app)
-    loader = CatalystCaseLoader(db)
-    provider = QuickMLMultilingualProvider(
-        endpoint=os.environ["QUICKML_EMBEDDINGS_ENDPOINT"],
+def build_embedding_provider(app):
+    """Construct the configured provider without making bootstrap fail.
+
+    The endpoint is an account-side live gate. Until it is configured, the
+    unavailable adapter preserves structured and identity-only scan paths and
+    makes semantic operations return the normal bounded provider failure.
+    """
+    endpoint = os.environ.get("QUICKML_EMBEDDINGS_ENDPOINT", "").strip()
+    if not endpoint:
+        return UnavailableEmbeddingProvider()
+    return QuickMLMultilingualProvider(
+        endpoint=endpoint,
         token=_token(app),
         org_id=os.environ["QUICKML_ORG_ID"],
         model=os.environ.get("QUICKML_EMBEDDINGS_MODEL", "multilingual-v1"),
         timeout=float(os.environ.get("QUICKML_EMBEDDINGS_TIMEOUT", "10")),
         batch_size=int(os.environ.get("QUICKML_EMBEDDINGS_BATCH_SIZE", "32")),
     )
+
+
+def build_api(app):
+    db = ZcqlDB(app)
+    loader = CatalystCaseLoader(db)
+    provider = build_embedding_provider(app)
     active_index_version = os.environ.get(
         "QUICKML_EMBEDDINGS_INDEX_VERSION", "mo-index-v1"
     )

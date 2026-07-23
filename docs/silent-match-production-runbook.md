@@ -173,7 +173,11 @@ derived graph state.
 - If a new embedding model fails evaluation, switch the active index version
   back to the prior verified version; do not delete the old records first.
 - If QuickML embeddings are unavailable, do not claim semantic matches. Keep
-  structured scoring and explicit limitations only.
+  structured scoring and explicit limitations only. The deployed bootstrap
+  constructs a bounded unavailable-provider adapter instead of failing the
+  whole function at startup; semantic routes return the normal service
+  failure while live/batch scoring can still persist identity/structured
+  evidence.
 - If graph/entity enrichment fails, the silent-match scanner may continue with
   its available structured/identity evidence and records the limitation.
 - Graph projection writes are versioned and idempotent; switch

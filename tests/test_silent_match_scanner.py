@@ -1,4 +1,5 @@
 from functions.crime_query.silent_match_scanner import SilentMatchScanner
+from functions.crime_query.mo_embeddings import EmbeddingError
 
 
 class Loader:
@@ -21,6 +22,11 @@ class CapturingMatcher(Matcher):
     def similar_cases(self, source, candidates, caller, limit=10):
         self.candidates = list(candidates)
         return []
+
+
+class UnavailableMatcher(Matcher):
+    def similar_cases(self, source, candidates, caller, limit=10):
+        raise EmbeddingError("provider endpoint must not escape")
 
 
 class Repository:
@@ -133,3 +139,16 @@ def test_recipient_delivery_failure_is_bounded_and_sanitized():
     assert repo.rows
     assert repo.recipient_attempts == 2
     assert result.failures == ("recipient delivery failed",)
+
+
+def test_unavailable_semantic_provider_keeps_structured_alert_scoring():
+    repo = Repository()
+    scanner = SilentMatchScanner(
+        Loader(case(1, "Ravi Kumar", 1), [case(2, "Ravi Kumar", 2)]),
+        UnavailableMatcher(), repo,
+    )
+
+    result = scanner.scan(anchor_case_id=1, trigger_source="live")
+
+    assert result.failures == ("semantic retrieval failed",)
+    assert result.alerts and result.alerts[0]["Score"] >= 60

@@ -12,6 +12,19 @@ class EmbeddingError(Exception):
     pass
 
 
+class UnavailableEmbeddingProvider:
+    """Fail-closed provider used until the live endpoint is provisioned.
+
+    Keeping this object constructible lets the silent-match function boot and
+    continue structured/identity scoring. Callers receive one bounded error
+    when semantic retrieval or indexing actually needs the unavailable
+    capability; no endpoint, token, or narrative is exposed.
+    """
+
+    def embed_documents(self, texts):
+        raise EmbeddingError("multilingual embedding provider is unavailable")
+
+
 class QuickMLMultilingualProvider:
     """Small, validated adapter for the configured QuickML embedding endpoint."""
 
