@@ -50,6 +50,7 @@ def doc_tables():
 
 def test_catalog_table_names_match_document(doc_tables):
     assert set(catalog.TABLES) == set(doc_tables)
+    assert len(doc_tables) == 26
 
 
 def test_catalog_columns_match_document(doc_tables):

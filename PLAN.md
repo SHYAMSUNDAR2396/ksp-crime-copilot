@@ -11,7 +11,7 @@ Current production implementation plans: [Cross-Lingual MO Matching + Silent-Mat
 
 ## 1. Revised architecture (schema-grounded)
 
-The provided schema is a fully relational CCTNS-style model: 23 tables centred on `CaseMaster`, with the **only free text in `CaseMaster.BriefFacts`** and geo as `latitude`/`longitude`. There are **no phone, vehicle, address, or bank-account entities, and no cross-case person IDs**. Four consequences drive everything below:
+The provided schema is a fully relational CCTNS-style model: 26 tables centred on `CaseMaster`, with the **only free text in `CaseMaster.BriefFacts`** and geo as `latitude`/`longitude`. There are **no phone, vehicle, address, or bank-account entities, and no cross-case person IDs**. Four consequences drive everything below:
 
 1. **NL→SQL is the primary engine.** "Burglaries in Bengaluru East in the last 6 months" is a structured query, not a RAG question.
 2. **Document RAG shrinks to `BriefFacts`** — semantic "find similar cases" over case narratives.
@@ -58,7 +58,7 @@ flowchart TB
   end
 
   subgraph DATA["DATA"]
-    DS[("Data Store<br/>23 tables + edge tables + audit log")]
+    DS[("Data Store<br/>26 tables + edge tables + audit log")]
     CA[("Cache<br/>session context")]
     ST[("Stratus<br/>PDF / blob store")]
   end
@@ -203,7 +203,7 @@ current committed feature set until its own spec is approved.
 
 ### 1.1 Structured layer (primary)
 
-- All 23 tables loaded into **Catalyst Data Store** exactly as per the ER diagram.
+- All 26 tables loaded into **Catalyst Data Store** exactly as per the ER diagram.
 - **Query Agent = NL→SQL**: the prompt to Catalyst QuickML GLM-4.7-Flash contains the schema description plus the *actual lookup values* (CrimeHead/SubHead names, CaseStatus values, district and station names, Act short-names) so the model maps "murder" → `CrimeSubHead.CrimeHeadName='Murder'` and "Bengaluru East" → the right `Unit`/`District` IDs without guessing.
 - **Validation layer before execution**: generated SQL is parsed and checked against an allowlist of tables/columns/functions; anything outside it is rejected and re-prompted. SELECT-only, always scoped by the caller's RBAC filter (§1.5). This is the NL→SQL hallucination guard.
 - Every structured answer cites the `CrimeNo`s (and aggregate counts cite the filter used), rendered as clickable citations.

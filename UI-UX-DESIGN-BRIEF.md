@@ -10,7 +10,7 @@
 
 ## 1. What this product is
 
-KSP Crime Copilot is a **conversational AI assistant** that lets police officers query a 23-table crime database using natural language — in **Kannada or English** — and receive cited, explainable answers with interactive visualizations.
+KSP Crime Copilot is a **conversational AI assistant** that lets police officers query a 26-table crime database using natural language — in **Kannada or English** — and receive cited, explainable answers with interactive visualizations.
 
 The officer speaks or types a question like *"ಬೆಂಗಳೂರು ಪೂರ್ವದಲ್ಲಿ ಕಳೆದ 6 ತಿಂಗಳಲ್ಲಿ ಕಳ್ಳತನ ಪ್ರಕರಣಗಳು?"* (Show me theft cases in Bengaluru East in the last 6 months), and gets back a structured answer with clickable CrimeNo citations, a hotspot map, trend charts, and optionally a network graph — all in the same language.
 
@@ -847,7 +847,7 @@ Every screen needs thoughtful empty states. Police officers should never see a b
 
 - **[PLAN.md](PLAN.md)** — full architecture, data flow diagrams, demo runbook, and cut lines
 - **[Technical Report](KSP-Datathon2026-Conversational-AI-Technical-Report.html)** — original strategy document with persona analysis, evaluation metrics, and the "dossier" visual language that the color palette is derived from
-- **[ER Diagram](Police_FIR_ER_Diagram.md)** — 23-table database schema. The designer should understand the data model to know what fields are available for display (e.g., CrimeNo, CrimeHead, StationName, DistrictName, IncidentFromDate)
+- **[ER Diagram](Police_FIR_ER_Diagram.md)** — 26-table database schema. The designer should understand the data model to know what fields are available for display (e.g., CrimeNo, CrimeHead, StationName, DistrictName, IncidentFromDate)
 
 ---
 

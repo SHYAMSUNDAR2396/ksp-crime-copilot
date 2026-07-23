@@ -123,7 +123,7 @@ flowchart LR
 
 ## Data Model
 
-The authoritative schema is [`Police_FIR_ER_Diagram.md`](Police_FIR_ER_Diagram.md). It is a 23-table relational CCTNS-style model centered on `CaseMaster`.
+The authoritative schema is [`Police_FIR_ER_Diagram.md`](Police_FIR_ER_Diagram.md). It is a 26-table relational CCTNS-style model centered on `CaseMaster`.
 
 Important schema constraints:
 
