@@ -9,7 +9,9 @@ composition boundary.
 
 Catalyst deployments can map this contract to Function fan-out or Circuits.
 The local implementation uses a bounded thread pool so the same contract is
-deterministically testable without requiring an orchestration service.
+deterministically testable without requiring an orchestration service. Every
+specialist and composition wait is bounded by the smaller of its agent timeout
+and the task's total deadline.
 """
 
 import concurrent.futures
@@ -108,15 +110,22 @@ def _run_group(task, names, handlers, payload, timeout_override_ms, parallel=Tru
                     name, AGENT_UNAVAILABLE, 0, dt.datetime.now(dt.timezone.utc),
                 )
             else:
-                timeout_ms = timeout_override_ms or AGENT_SPECS[name].timeout_ms
-                bundle, run = _invoke(
-                    name, handler, task, payload, timeout_ms, task.retry_budget,
-                )
+                configured_timeout = timeout_override_ms or AGENT_SPECS[name].timeout_ms
+                timeout_ms = _bounded_timeout_ms(task, configured_timeout)
+                if timeout_ms <= 0:
+                    bundle, run = _failure_result(
+                        name, AGENT_TIMEOUT, 0, dt.datetime.now(dt.timezone.utc),
+                    )
+                else:
+                    bundle, run = _invoke(
+                        name, handler, task, payload, timeout_ms, task.retry_budget,
+                    )
             bundles.append(bundle)
             runs.append(run)
         return bundles, runs
 
     futures = {}
+    timeouts = {}
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(names)))
     try:
         for name in names:
@@ -125,14 +134,20 @@ def _run_group(task, names, handlers, payload, timeout_override_ms, parallel=Tru
                 futures[name] = None
                 continue
             spec = AGENT_SPECS[name]
-            timeout_ms = timeout_override_ms or spec.timeout_ms
+            timeout_ms = _bounded_timeout_ms(
+                task, timeout_override_ms or spec.timeout_ms,
+            )
+            timeouts[name] = timeout_ms
+            if timeout_ms <= 0:
+                futures[name] = None
+                continue
             futures[name] = executor.submit(
                 _invoke, name, handler, task, payload, timeout_ms, task.retry_budget,
             )
 
         live = {name: future for name, future in futures.items() if future is not None}
         max_timeout = max(
-            (timeout_override_ms or AGENT_SPECS[name].timeout_ms for name in live),
+            (timeouts[name] for name in live),
             default=0,
         )
         done, _ = concurrent.futures.wait(
@@ -142,8 +157,11 @@ def _run_group(task, names, handlers, payload, timeout_override_ms, parallel=Tru
         for name in names:
             future = futures[name]
             if future is None:
+                error_code = (
+                    AGENT_TIMEOUT if timeouts.get(name, 0) <= 0 else AGENT_UNAVAILABLE
+                )
                 bundle, run = _failure_result(
-                    name, AGENT_UNAVAILABLE, 0, dt.datetime.now(dt.timezone.utc),
+                    name, error_code, 0, dt.datetime.now(dt.timezone.utc),
                 )
             elif future not in done:
                 future.cancel()
@@ -168,14 +186,27 @@ def _run_group(task, names, handlers, payload, timeout_override_ms, parallel=Tru
 
 
 def _deadline_expired(task):
+    remaining = _remaining_ms(task)
+    return remaining is not None and remaining <= 0
+
+
+def _remaining_ms(task):
+    """Return the task's remaining budget, or ``None`` when unbounded."""
     deadline = task.deadline
     if deadline is None:
-        return False
+        return None
     if deadline.tzinfo is None:
         now = dt.datetime.now()
     else:
         now = dt.datetime.now(dt.timezone.utc)
-    return now >= deadline
+    return max(0, int((deadline - now).total_seconds() * 1000))
+
+
+def _bounded_timeout_ms(task, configured_timeout_ms):
+    remaining = _remaining_ms(task)
+    if remaining is None:
+        return configured_timeout_ms
+    return min(configured_timeout_ms, remaining)
 
 
 def _run_composition(task, composer, merged, payload, timeout_override_ms, parallel):
@@ -186,9 +217,10 @@ def _run_composition(task, composer, merged, payload, timeout_override_ms, paral
     an isolated worker and returns at the deadline without waiting for a
     provider call that cannot be cancelled locally.
     """
-    timeout_ms = timeout_override_ms or AGENT_SPECS["Composition Agent"].timeout_ms
+    configured_timeout = timeout_override_ms or AGENT_SPECS["Composition Agent"].timeout_ms
+    timeout_ms = _bounded_timeout_ms(task, configured_timeout)
     started = dt.datetime.now(dt.timezone.utc)
-    if _deadline_expired(task):
+    if timeout_ms <= 0:
         return None, AgentRun("Composition Agent", "failed", 0, 0, AGENT_TIMEOUT)
 
     if not parallel:

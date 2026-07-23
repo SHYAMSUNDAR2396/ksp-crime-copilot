@@ -166,3 +166,46 @@ def test_composition_timeout_is_reported_and_does_not_claim_completion():
     assert "Composition Agent" in result.failed_agents
     composition_run = next(run for run in result.runs if run.agent_name == "Composition Agent")
     assert composition_run.error_code == "AGENT_TIMEOUT"
+
+
+def test_total_deadline_bounds_parallel_specialist_wait():
+    task = build_task_context(
+        "request-7", "structured_query", _context(("query_structured_cases",)),
+        deadline=dt.datetime.now(dt.timezone.utc) + dt.timedelta(milliseconds=10),
+    )
+
+    def slow(_task, _payload):
+        time.sleep(0.08)
+        return _bundle("Structured Query Agent", "111111111111111111", "late")
+
+    started = time.monotonic()
+    result = execute_task_graph(task, {"Structured Query Agent": slow}, parallel=True)
+
+    assert time.monotonic() - started < 0.06
+    assert result.complete is False
+    assert result.runs[0].error_code == "AGENT_TIMEOUT"
+
+
+def test_total_deadline_is_applied_to_composition_budget():
+    task = build_task_context(
+        "request-8", "structured_query", _context(("query_structured_cases",)),
+        deadline=dt.datetime.now(dt.timezone.utc) + dt.timedelta(milliseconds=10),
+    )
+
+    def slow_composer(_merged, _payload):
+        time.sleep(0.08)
+        return "late answer"
+
+    result = execute_task_graph(
+        task,
+        {"Structured Query Agent": lambda *_args: _bundle(
+            "Structured Query Agent", "111111111111111111", "ok",
+        )},
+        composer=slow_composer,
+        parallel=True,
+    )
+
+    assert result.complete is False
+    assert result.composition is None
+    composition_run = next(run for run in result.runs if run.agent_name == "Composition Agent")
+    assert composition_run.error_code == "AGENT_TIMEOUT"

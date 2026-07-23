@@ -174,7 +174,8 @@ final answer while preserving names and `CrimeNo`s verbatim.
 The local execution contract is implemented by
 `functions/crime_query/supervisor_runtime.py`: isolated specialists are
 bounded by per-agent timeouts and retry budgets, failures are reduced to stable
-codes, and composition runs only after the merged evidence envelope. The
+codes, the task deadline is propagated into specialist and composition waits,
+and composition runs only after the merged evidence envelope. The
 SQLite adapter uses inline execution because its connection is thread-bound;
 Catalyst deployments should map independent groups to isolated Function or
 Circuit invocations for parallel fan-out.
