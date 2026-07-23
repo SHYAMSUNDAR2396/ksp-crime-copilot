@@ -10,8 +10,10 @@
 > RBAC, typed evidence, conversation/voice parity, graph/analytics/profile/
 > demographic views, narrative retrieval, versioned graph projection,
 > supervisor task-graph execution, and cross-jurisdiction silent-match
-> indexing/scanning/alerts. The local suite currently passes 411 tests and the
-> deterministic integrated workflow passes. Live production readiness remains
+> indexing/scanning/alerts, and the replay/evaluation artifacts. The local
+> suite currently passes 416 tests, the nine-beat deterministic backup replay
+> passes 9/9, and the labelled offline contract baseline passes 30/30. Live
+> production readiness remains
 > unverified until the Catalyst CLI/project credentials, principal mapping,
 > QuickML RAG and multilingual embedding endpoints, scheduled jobs, and
 > authenticated Catalyst smoke checks are executed; see `docs/CATALYST_RUNBOOK.md`.

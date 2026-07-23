@@ -1,0 +1,118 @@
+{
+  "beats": [
+    {
+      "details": {
+        "chat_refused": false,
+        "citation_count": 2,
+        "citations_match": true,
+        "voice_contract": true,
+        "voice_refused": false
+      },
+      "id": 1,
+      "name": "chat_voice_query_parity",
+      "ok": true
+    },
+    {
+      "details": {
+        "first_turn": 1,
+        "follow_up_turn": 2,
+        "stored_turns": 2
+      },
+      "id": 2,
+      "name": "context_follow_up",
+      "ok": true
+    },
+    {
+      "details": {
+        "command_count": 5000,
+        "constable_count": 1808,
+        "statewide_scope_wider": true
+      },
+      "id": 3,
+      "name": "rank_scoped_rbac",
+      "ok": true
+    },
+    {
+      "details": {
+        "citations": 370,
+        "edges": 2156,
+        "nodes": 1132,
+        "refused": false
+      },
+      "id": 4,
+      "name": "network_and_hidden_link",
+      "ok": true
+    },
+    {
+      "details": {
+        "has_prevention_brief": true,
+        "hotspots": 233,
+        "refused": false,
+        "trend_points": 2218
+      },
+      "id": 5,
+      "name": "pattern_hotspot_prevention",
+      "ok": true
+    },
+    {
+      "details": {
+        "citations": 15,
+        "decision_support_only": true,
+        "linked_cases": 15,
+        "refused": false
+      },
+      "id": 6,
+      "name": "behavioral_profile",
+      "ok": true
+    },
+    {
+      "details": {
+        "citations": 3,
+        "local_fallback_marked": true,
+        "matches": 3,
+        "refused": false
+      },
+      "id": 7,
+      "name": "explainable_narrative_citations",
+      "ok": true
+    },
+    {
+      "details": {
+        "audit_refused": false,
+        "audit_rows": 16,
+        "export_code": "OK",
+        "export_content_type": "text/html",
+        "pdf_live_gate": false
+      },
+      "id": 8,
+      "name": "audit_and_conversation_export",
+      "ok": true
+    },
+    {
+      "details": {
+        "batch_alerts_created": 1,
+        "batch_live_score_parity": true,
+        "citation_pair": [
+          "100010001202400001",
+          "100010002202400001"
+        ],
+        "index_version": "demo-mo-v1",
+        "indexed": 2,
+        "live_alerts_updated": 1,
+        "recipient_count": 1,
+        "status": "Linked"
+      },
+      "id": 9,
+      "name": "cross_jurisdiction_silent_match",
+      "ok": true
+    }
+  ],
+  "generated_for": "PLAN.md demo runbook",
+  "live_catalyst_executed": false,
+  "schema_version": "ksp-demo-replay-v1",
+  "summary": {
+    "failed": 0,
+    "passed": 9
+  },
+  "synthetic_data": true
+}

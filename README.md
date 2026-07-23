@@ -30,6 +30,12 @@ authenticated principal mapping, RAG/embedding endpoints, and authenticated
 smoke execution remain deployment gates. See [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md)
 before treating the live path as fully closed.
 
+The disconnected backup demo is replayable with synthetic data through
+[`docs/DEMO_REPLAY.md`](docs/DEMO_REPLAY.md); its current nine-beat transcript
+is [`docs/demo-replay.json`](docs/demo-replay.json). The offline synthetic
+contract baseline and live-measurement boundary are recorded in
+[`docs/evaluation-slide.md`](docs/evaluation-slide.md).
+
 ## Main Capabilities
 
 ### Conversational query
@@ -182,6 +188,22 @@ python -m tools.gen_data --sqlite build/crime.db --csv build/csv
 ```
 
 The generator creates 5,000 synthetic cases and deliberately seeds patterns used by tests and demonstrations, including two-wheeler theft trends, a burglary cluster, and name variants such as `Ravi Kumar`, `Ravi K`, `R. Kumar`, and `Ravikumar`.
+
+Generate the disconnected backup replay and its transcript:
+
+```bash
+python -m tools.demo_replay
+```
+
+Generate the labelled offline contract baseline and evaluation slide:
+
+```bash
+python -m tools.offline_eval
+```
+
+The offline evaluator replays gold SQL and therefore measures execution and
+evidence plumbing, not live GLM-4.7 quality. Run the authenticated QuickML
+evaluation in the section below for model-quality numbers.
 
 ## Evaluation
 

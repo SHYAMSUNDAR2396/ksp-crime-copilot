@@ -179,6 +179,13 @@ SQLite adapter uses inline execution because its connection is thread-bound;
 Catalyst deployments should map independent groups to isolated Function or
 Circuit invocations for parallel fan-out.
 
+The nine-beat disconnected backup is executable through
+`tools/demo_replay.py`; it writes the synthetic, redacted transcript at
+`docs/demo-replay.json` and verifies the same application boundaries used by
+the live path. `tools/offline_eval.py` writes the labelled synthetic contract
+baseline and `docs/evaluation-slide.md`. These artifacts are explicitly
+offline evidence and do not close the authenticated Catalyst/QuickML gate.
+
 For proactive work, the same contract is invoked by a post-ingestion Function
 or Cron. `SilentMatchAgent` consumes structured, identity, graph, and semantic
 bundles, applies the bounded evidence scorer, and writes durable alert state.
@@ -504,6 +511,6 @@ flowchart LR
 - All planned features pass in a full run-through **on Catalyst, not localhost**, with documented fallback behavior where an external dependency is unavailable.
 - Batch and post-ingestion live silent-match scans produce identical evidence for identical fixtures and do not duplicate alerts.
 - Cross-lingual MO matches return original Kannada/English excerpts, both `CrimeNo`s, and model/index version.
-- Recorded backup demo exists.
-- Eval numbers computed and on the slide.
+- A replayable synthetic backup demo exists at [docs/DEMO_REPLAY.md](docs/DEMO_REPLAY.md), with a nine-beat transcript at [docs/demo-replay.json](docs/demo-replay.json); this is the disconnected fallback artifact and does not substitute for the required recorded backup demo.
+- Offline contract eval numbers are computed and on [docs/evaluation-slide.md](docs/evaluation-slide.md); live GLM/Catalyst numbers must be appended after the account-side run.
 - Every table/column referenced in code exists in [Police_FIR_ER_Diagram.md](Police_FIR_ER_Diagram.md) — no invented schema.

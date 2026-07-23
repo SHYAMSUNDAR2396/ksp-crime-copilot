@@ -64,6 +64,13 @@ def _group_column_nodes(select):
 
 
 def _dotted(column, aliases):
+    # sqlglot represents a validated SELECT-list alias in ORDER BY as an
+    # unqualified Column (for example ``ORDER BY n``). It is not a source
+    # table field and therefore cannot be a sensitive column reference. Keep
+    # it as its bare name so the masking walk remains total instead of
+    # raising KeyError after validation has already accepted the query.
+    if not column.table:
+        return column.name
     return "{0}.{1}".format(aliases[column.table], column.name)
 
 

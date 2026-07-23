@@ -58,6 +58,18 @@ def test_dgp_gets_no_unit_predicate():
     assert 'PoliceStationID' not in sql
 
 
+def test_order_by_selected_alias_does_not_crash_sensitive_policy():
+    sql, redact = scoped(
+        'SELECT Unit.UnitName, COUNT(CaseMaster.CaseMasterID) AS n '
+        'FROM CaseMaster '
+        'LEFT JOIN Unit ON CaseMaster.PoliceStationID = Unit.ROWID '
+        'GROUP BY Unit.UnitName ORDER BY n DESC LIMIT 1',
+        DGP,
+    )
+    assert 'ORDER BY n DESC' in sql
+    assert redact == []
+
+
 def test_scope_uses_the_casemaster_alias():
     sql, _ = scoped(
         'SELECT cm.CrimeNo FROM CaseMaster cm', CONSTABLE
