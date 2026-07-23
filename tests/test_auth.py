@@ -47,6 +47,27 @@ def test_unknown_authenticated_principal_fails_closed(monkeypatch):
     assert authenticated_employee_id(App(), lambda employee_id: None) is None
 
 
+def test_user_management_accessor_is_preferred_when_available(monkeypatch):
+    calls = []
+
+    class Authentication:
+        def get_current_user(self):
+            return {"user_id": "catalyst-42"}
+
+    class App:
+        def user_management(self):
+            calls.append("user_management")
+            return Authentication()
+
+        def authentication(self):
+            calls.append("deprecated_authentication")
+            raise AssertionError("deprecated accessor must not be used")
+
+    monkeypatch.setenv("KSP_AUTH_EMPLOYEE_MAP", '{"catalyst-42": 9}')
+    assert authenticated_employee_id(App(), lambda employee_id: object()) == 9
+    assert calls == ["user_management"]
+
+
 def test_service_principal_uses_explicit_service_mapping(monkeypatch):
     class Authentication:
         def get_current_user(self):

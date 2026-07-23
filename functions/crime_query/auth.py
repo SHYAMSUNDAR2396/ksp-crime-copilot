@@ -125,7 +125,12 @@ def principal_allowed_for_route(kind, method, path):
 def authenticated_principal(app, caller_loader, environ=None):
     """Resolve the authenticated Catalyst principal, failing closed."""
     try:
-        authentication = app.authentication()
+        # ``authentication()`` is deprecated in zcatalyst-sdk 1.3.0; retain
+        # the fallback for older injected test/runtime adapters.
+        user_management = getattr(app, "user_management", None)
+        authentication = (
+            user_management() if callable(user_management) else app.authentication()
+        )
         user = authentication.get_current_user()
     except Exception:
         return None

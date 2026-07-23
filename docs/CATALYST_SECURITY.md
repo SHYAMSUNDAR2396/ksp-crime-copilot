@@ -4,6 +4,8 @@ The request flow follows the root `PLAN.md` architecture: Catalyst
 authentication happens at the edge, then the function resolves the
 authenticated principal to an existing `Employee` row before rank-derived
 RBAC runs. A browser-supplied `employee_id` is never trusted.
+The runtime uses Catalyst's current `user_management()` accessor, with a
+backward-compatible fallback only for older SDK adapters.
 
 ## Required deployment configuration
 
