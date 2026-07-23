@@ -202,6 +202,19 @@ configured, the handler returns the safe HTML fallback for local tests; the
 deployed configuration should keep the endpoint enabled for the PLAN.md PDF
 export requirement.
 
+### Analytics forecast provider — optional live enhancement
+
+The analytics view uses a deterministic station-by-crime-type moving average
+by default. When the account provisions a QuickML aggregate forecasting
+endpoint, set `QUICKML_ANALYTICS_ENDPOINT`, `QUICKML_ANALYTICS_MODEL`, and
+`QUICKML_ANALYTICS_TIMEOUT` in `functions/crime_query/catalyst-config.json`.
+The adapter sends only period/count aggregates and validates finite,
+non-negative baseline and forecast values. Provider failures fall back to the
+deterministic result and mark the provider fallback; they never expose the
+provider response to the browser. This is a separate analytics contract;
+Catalyst Pipelines' SDK is for CI/CD pipeline execution, not crime forecast
+output.
+
 Three things only a live call revealed, all fixed in `functions/crime_query/llm.py`:
 1. The real response shape is `{"response": "...", "usage": {...}}`, not
    the OpenAI-style `{"choices": [...]}` the console's own sample documents.

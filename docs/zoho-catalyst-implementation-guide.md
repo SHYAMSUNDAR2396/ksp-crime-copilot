@@ -76,7 +76,7 @@ Case ingestion or scheduled window
 | Structured Query Agent | `agent.py`, `prompt.py`, `validate.py`, `rbac.py` | GLM only for NL→ZCQL and post-verification composition | SELECT-only validation, live catalog, ZCQL FK/ROWID joins, RBAC predicate |
 | Narrative Retrieval Agent | `mo_matcher.py`, `mo_embeddings.py`, `mo_index.py` | QuickML multilingual embeddings | only visible cases are embedded and returned; bounded top-k |
 | Graph Agent | `graph.py`, `intelligence_api.py` | None | bounded hops, visible rows, edge provenance and confidence |
-| Analytics Agent | `analytics.py`, `intelligence_api.py` | None for deterministic summaries | aggregate-only output; no caste/religion predictive use |
+| Analytics Agent | `analytics.py`, `intelligence_api.py` | Optional validated QuickML aggregate forecast provider; deterministic fallback | aggregate-only output; no caste/religion predictive use |
 | Silent-Match Agent | `silent_match_scoring.py`, `silent_match_scanner.py` | MO similarity is bounded evidence only | semantic similarity alone cannot create an alert |
 | Composition Agent | `llm.py`, `translate.py`, `evidence.py` | GLM-4.7-Flash where language generation is needed | cited claims, protected identifiers, refusal on unsupported evidence |
 
@@ -156,8 +156,12 @@ uploaded directly from the console, run that preparation command first.
    `functions/crime_query/catalyst-config.json`.
 6. Configure the multilingual embedding endpoint/model for the silent-match
    function; an empty endpoint is intentionally a live-deployment blocker.
-7. Configure `SMARTBROWZ_ENDPOINT` and grant `ZohoCatalyst.pdfshot.EXECUTE`.
-8. Configure Cache, Stratus, Job Scheduling, and Circuit retry policies before
+7. Optionally configure `QUICKML_ANALYTICS_ENDPOINT`, model, and timeout for
+   the validated time-series provider. It receives aggregate counts only;
+   malformed or unavailable provider output falls back to the deterministic
+   station-by-crime-type moving average and is marked in the response.
+8. Configure `SMARTBROWZ_ENDPOINT` and grant `ZohoCatalyst.pdfshot.EXECUTE`.
+9. Configure Cache, Stratus, Job Scheduling, and Circuit retry policies before
    enabling graph projection, index refresh, and proactive scans.
 
 Deploy the two Advanced I/O functions with their local configuration files:

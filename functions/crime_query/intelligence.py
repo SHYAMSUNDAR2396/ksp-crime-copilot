@@ -56,7 +56,7 @@ def network_view(context, start_node, cases, accused_rows=(), arrest_rows=(), se
     }
 
 
-def analytics_view(context, cases, threshold_ratio=1.25):
+def analytics_view(context, cases, threshold_ratio=1.25, analytics_provider=None):
     require_capability(context, "query_structured_cases")
     visible = [
         row for row in cases
@@ -64,7 +64,9 @@ def analytics_view(context, cases, threshold_ratio=1.25):
     ]
     trends = trend_rollup(visible)
     hotspots = dbscan_hotspots(visible)
-    warnings = series_warnings(trends, threshold_ratio=threshold_ratio)
+    warnings = series_warnings(
+        trends, threshold_ratio=threshold_ratio, provider=analytics_provider,
+    )
     if warnings:
         warning = dict(max(warnings, key=lambda item: item["ratio"]))
         warning["warning"] = any(item["warning"] for item in warnings)

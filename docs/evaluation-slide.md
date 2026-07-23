@@ -20,6 +20,8 @@ pending an authenticated project run.
 - Kannada/English parity and real speech recognition: pending live voice test.
 - Live p95 latency, specialist completion, and alert deduplication: pending
   Catalyst Job Scheduling and smoke execution.
+- QuickML aggregate forecasting/anomaly provider: pending endpoint provisioning;
+  deterministic geographic/temporal moving-average fallback remains enabled.
 - The checked-in deployment configuration intentionally leaves the RAG and
   multilingual embedding endpoints blank until the account-side endpoints
   are provisioned.

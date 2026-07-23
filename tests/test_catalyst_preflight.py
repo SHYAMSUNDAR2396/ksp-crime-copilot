@@ -54,6 +54,7 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
                 "QUICKML_ORG_ID": "123",
                 "SMARTBROWZ_ENDPOINT": "https://example.invalid/pdf",
                 "QUICKML_RAG_ENDPOINT": "https://example.invalid/rag",
+                "QUICKML_ANALYTICS_ENDPOINT": "https://example.invalid/analytics",
                 "KSP_AUTH_EMPLOYEE_MAP": '{"principal-1": 9}',
                 "KSP_AUTH_SERVICE_MAP": '{"service-1": 9001}',
             },

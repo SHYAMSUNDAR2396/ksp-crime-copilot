@@ -243,7 +243,7 @@ def _profile_keys(row):
     return keys
 
 
-def _handle_operation(payload, db, today=None):
+def _handle_operation(payload, db, today=None, analytics_provider=None):
     """Dispatch one capability view after the same caller/RBAC gate."""
     payload = payload or {}
     operation = payload.get("operation")
@@ -323,7 +323,7 @@ def _handle_operation(payload, db, today=None):
         )
         claims = ("Derived network connections are investigative leads, not proof of guilt.",)
     elif operation == "analytics":
-        data = analytics_view(context, visible)
+        data = analytics_view(context, visible, analytics_provider=analytics_provider)
         claims = ("Analytics are geographic and temporal decision-support summaries.",)
     elif operation == "profile":
         if payload.get("case_master_id") is None:
@@ -413,10 +413,10 @@ def _handle_operation(payload, db, today=None):
     }
 
 
-def handle_operation(payload, db, today=None):
+def handle_operation(payload, db, today=None, analytics_provider=None):
     """Return a bounded refusal when the Data Store is unavailable."""
     try:
-        return _handle_operation(payload, db, today)
+        return _handle_operation(payload, db, today, analytics_provider)
     except DBError:
         return _refused(
             "The intelligence service is temporarily unavailable.",

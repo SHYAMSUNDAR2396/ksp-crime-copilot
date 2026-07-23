@@ -8,6 +8,90 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 
+import requests
+
+
+class AnalyticsProviderError(Exception):
+    """Raised when a configured forecast provider cannot return safe output."""
+
+
+class QuickMLAnalyticsProvider:
+    """Validated adapter for an account-provisioned QuickML analytics endpoint.
+
+    The endpoint receives aggregate time-series counts only. Its response is
+    treated as untrusted provider data and must contain non-negative finite
+    baseline/forecast values before it can influence an early-warning card.
+    """
+
+    def __init__(self, endpoint, token, org_id, model="crime-trend-v1",
+                 timeout=10.0, transport=None):
+        self.endpoint = str(endpoint or "").strip()
+        self.token = str(token or "")
+        self.org_id = str(org_id or "")
+        self.model = str(model or "crime-trend-v1")
+        self.timeout = float(timeout)
+        self.transport = transport or requests.post
+        if not self.endpoint or not self.token or not self.org_id:
+            raise ValueError("analytics provider credentials are required")
+        if not self.endpoint.startswith("https://") or self.timeout <= 0:
+            raise ValueError("analytics provider configuration is invalid")
+
+    def forecast(self, counts, window, threshold_ratio, station_id, crime_subhead_id):
+        values = []
+        for value in counts:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                raise AnalyticsProviderError("provider input is invalid")
+            if not math.isfinite(number) or number < 0:
+                raise AnalyticsProviderError("provider input is invalid")
+            values.append(int(number) if number.is_integer() else number)
+        try:
+            response = self.transport(
+                self.endpoint,
+                headers={
+                    "Authorization": "Zoho-oauthtoken {0}".format(self.token),
+                    "X-Catalyst-Org-Id": self.org_id,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "counts": values,
+                    "window": int(window),
+                    "threshold_ratio": float(threshold_ratio),
+                    "series_key": {
+                        "station_id": station_id,
+                        "crime_subhead_id": crime_subhead_id,
+                    },
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            body = response.json()
+            result = body.get("data", body) if isinstance(body, dict) else None
+            if not isinstance(result, dict):
+                raise AnalyticsProviderError("provider response is invalid")
+            baseline = float(result["baseline"])
+            forecast = float(result["forecast"])
+            observations = int(result.get("observations", len(values)))
+            provider = str(result.get("provider") or self.model).strip()
+        except AnalyticsProviderError:
+            raise
+        except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise AnalyticsProviderError("provider request failed") from exc
+        if (
+            not math.isfinite(baseline) or not math.isfinite(forecast)
+            or baseline < 0 or forecast < 0 or observations < 1
+            or not provider or len(provider) > 80
+        ):
+            raise AnalyticsProviderError("provider response is invalid")
+        return {
+            "baseline": round(baseline, 3),
+            "forecast": round(forecast, 3),
+            "observations": observations,
+            "provider": provider,
+        }
+
 
 @dataclass(frozen=True)
 class TrendPoint:
@@ -131,7 +215,7 @@ def early_warning(counts, threshold_ratio=1.25, window=3):
     }
 
 
-def series_warnings(trends, threshold_ratio=1.25, window=3):
+def series_warnings(trends, threshold_ratio=1.25, window=3, provider=None):
     """Forecast each station/crime series independently.
 
     A warning for one station and crime type must never be inflated by trend
@@ -147,7 +231,25 @@ def series_warnings(trends, threshold_ratio=1.25, window=3):
                 groups[key]["citations"].append(citation)
     result = []
     for (station_id, crime_subhead_id), values in sorted(groups.items(), key=lambda item: str(item[0])):
-        warning = early_warning(values["counts"], threshold_ratio, window)
+        if provider is None:
+            warning = early_warning(values["counts"], threshold_ratio, window)
+        else:
+            try:
+                warning = provider.forecast(
+                    values["counts"], window, threshold_ratio,
+                    station_id, crime_subhead_id,
+                )
+                baseline = warning["baseline"]
+                forecast = warning["forecast"]
+                warning = {
+                    **warning,
+                    "ratio": round((forecast / baseline) if baseline else 0.0, 3),
+                    "warning": bool(baseline and (forecast / baseline) >= threshold_ratio),
+                    "scope": "station-by-crime-type aggregate",
+                }
+            except (AnalyticsProviderError, ValueError, TypeError, KeyError, AttributeError):
+                warning = early_warning(values["counts"], threshold_ratio, window)
+                warning["provider_fallback"] = True
         result.append({
             "station_id": station_id,
             "crime_subhead_id": crime_subhead_id,

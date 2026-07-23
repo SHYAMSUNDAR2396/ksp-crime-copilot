@@ -14,8 +14,9 @@
 > executable Catalyst job/event contracts, total supervisor deadline propagation,
 > Catalyst-backend bounded fan-out selection, per-series analytics warnings, and
 > the replay/evaluation artifacts, the root Catalyst deployment manifest, and
-> the standalone silent-match vendor preparation. The local suite currently
-> passes 437 tests, the nine-beat deterministic backup replay
+> the standalone silent-match vendor preparation and validated analytics
+> provider fallback. The local suite currently passes 441 tests, the nine-beat
+> deterministic backup replay
 > passes 9/9, and the labelled offline contract baseline passes 30/30. Live
 > production readiness remains
 > unverified until the Catalyst CLI/project credentials, principal mapping,

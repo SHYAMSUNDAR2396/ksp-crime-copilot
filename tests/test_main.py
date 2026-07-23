@@ -47,6 +47,22 @@ def test_unknown_employee_is_rejected_before_any_llm_call(db):
     assert llm.prompts == []
 
 
+def test_malformed_analytics_provider_configuration_uses_safe_fallback(monkeypatch):
+    monkeypatch.setenv("QUICKML_ANALYTICS_ENDPOINT", "https://analytics.example")
+
+    class App:
+        def credential(self):
+            class Credential:
+                def token(self):
+                    return "token"
+            return Credential()
+
+    # A malformed timeout is a deployment issue, not a reason to break the
+    # otherwise deterministic analytics path.
+    monkeypatch.setenv("QUICKML_ANALYTICS_TIMEOUT", "not-a-number")
+    assert main._analytics_provider(App()) is None
+
+
 def test_missing_question_is_rejected(db):
     result = main.handle_question(
         {"employee_id": 9}, db, FakeLLM([]), translate.NullTranslator(), TODAY

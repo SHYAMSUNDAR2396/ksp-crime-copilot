@@ -11,6 +11,7 @@ try:
     # Local/test context: main.py imported as functions.crime_query.main.
     from . import access, agent, audit_api, auth, catalog, conversation_api, intelligence_api, narrative_api, policy_audit, supervisor, supervisor_runtime, translate
     from .narrative import QuickMLRagProvider
+    from .analytics import QuickMLAnalyticsProvider
     from .conversation import CatalystCacheConversationStore, ConversationStoreError, ConversationTurn
     from .conversation_export import SmartBrowzPdfRenderer
     from .evidence import EvidenceBundle, filter_visible_bundle, merge_bundles
@@ -24,6 +25,7 @@ except ImportError:
     # dependencies vendored flat alongside it.
     import access, agent, audit_api, auth, catalog, conversation_api, intelligence_api, narrative_api, policy_audit, supervisor, supervisor_runtime, translate
     from narrative import QuickMLRagProvider
+    from analytics import QuickMLAnalyticsProvider
     from conversation import CatalystCacheConversationStore, ConversationStoreError, ConversationTurn
     from conversation_export import SmartBrowzPdfRenderer
     from evidence import EvidenceBundle, filter_visible_bundle, merge_bundles
@@ -331,6 +333,24 @@ def _narrative_retriever(app):
     )
 
 
+def _analytics_provider(app):
+    endpoint = os.environ.get("QUICKML_ANALYTICS_ENDPOINT", "").strip()
+    if not endpoint:
+        return None
+    try:
+        return QuickMLAnalyticsProvider(
+            endpoint=endpoint,
+            token=_quickml_token(app),
+            org_id=os.environ.get("QUICKML_ORG_ID"),
+            model=os.environ.get("QUICKML_ANALYTICS_MODEL", "crime-trend-v1"),
+            timeout=float(os.environ.get("QUICKML_ANALYTICS_TIMEOUT", "10")),
+        )
+    except (AttributeError, TypeError, ValueError):
+        # Preflight reports malformed deployment configuration; the request
+        # path still has the deterministic geographic/temporal fallback.
+        return None
+
+
 def handler(request):
     """Catalyst Advanced I/O Python entrypoint. Real signature confirmed by
     running `catalyst init` (Task 2): a Flask ``Request`` in, a Flask
@@ -382,7 +402,9 @@ def handler(request):
         )
         return make_response(jsonify(result), _http_status(result))
     if payload.get("operation"):
-        result = intelligence_api.handle_operation(payload, db, dt.date.today())
+        result = intelligence_api.handle_operation(
+            payload, db, dt.date.today(), analytics_provider=_analytics_provider(app),
+        )
         return make_response(jsonify(result), _http_status(result))
     if payload.get("session_id") is not None and payload.get("turn_id") is not None:
         conversation_store = CatalystCacheConversationStore(app.cache())

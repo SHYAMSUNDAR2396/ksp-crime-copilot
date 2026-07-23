@@ -1,4 +1,6 @@
 from functions.crime_query.analytics import (
+    AnalyticsProviderError,
+    QuickMLAnalyticsProvider,
     dbscan_hotspots,
     early_warning,
     forecast_next_period,
@@ -50,3 +52,74 @@ def test_series_warnings_do_not_mix_stations_or_crime_types():
     first = next(row for row in warnings if row["station_id"] == 1)
     assert first["observations"] == 3
     assert first["warning"] is False
+
+
+def test_series_warnings_use_validated_provider_output_per_series():
+    class Provider:
+        def __init__(self):
+            self.calls = []
+
+        def forecast(self, counts, window, threshold_ratio, station_id, crime_subhead_id):
+            self.calls.append((tuple(counts), station_id, crime_subhead_id))
+            return {"baseline": 2, "forecast": 4, "observations": len(counts),
+                    "provider": "quickml-analytics-v1"}
+
+    provider = Provider()
+    warnings = series_warnings(
+        trend_rollup([
+            {"CrimeRegisteredDate": "2026-01-01", "PoliceStationID": 1,
+             "CrimeMinorHeadID": 7, "CrimeNo": "FIR/1"},
+            {"CrimeRegisteredDate": "2026-02-01", "PoliceStationID": 2,
+             "CrimeMinorHeadID": 7, "CrimeNo": "FIR/2"},
+        ]), provider=provider, threshold_ratio=1.5,
+    )
+
+    assert len(provider.calls) == 2
+    assert warnings[0]["provider"] == "quickml-analytics-v1"
+    assert warnings[0]["warning"] is True
+
+
+def test_provider_failure_falls_back_without_leaking_error_details():
+    class Provider:
+        def forecast(self, *args, **kwargs):
+            raise AnalyticsProviderError("secret endpoint response")
+
+    warning = series_warnings(
+        trend_rollup([
+            {"CrimeRegisteredDate": "2026-01-01", "PoliceStationID": 1,
+             "CrimeMinorHeadID": 7, "CrimeNo": "FIR/1"},
+        ]), provider=Provider(),
+    )[0]
+
+    assert warning["provider"] == "deterministic_moving_average"
+    assert warning["provider_fallback"] is True
+    assert "secret" not in repr(warning)
+
+
+def test_quickml_analytics_provider_sends_aggregate_series_and_validates_response():
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"baseline": 3, "forecast": 5, "observations": 4,
+                              "provider": "quickml-analytics-v1"}}
+
+    def transport(endpoint, **kwargs):
+        assert endpoint == "https://quickml.example/analytics"
+        calls.append(kwargs)
+        return Response()
+
+    provider = QuickMLAnalyticsProvider(
+        "https://quickml.example/analytics", "token", "org-1", transport=transport,
+    )
+    result = provider.forecast([1, 2, 3, 4], 3, 1.25, 7, 9)
+
+    assert result["forecast"] == 5
+    assert calls[0]["headers"]["Authorization"] == "Zoho-oauthtoken token"
+    assert calls[0]["json"]["series_key"] == {
+        "station_id": 7, "crime_subhead_id": 9,
+    }
+    assert calls[0]["json"]["counts"] == [1, 2, 3, 4]
