@@ -52,7 +52,7 @@ flowchart TB
   subgraph AI["INTELLIGENCE — QuickML + Zia + SmartBrowz"]
     LLM["QuickML LLM Serving<br/>GLM-4.7-Flash"]
     RAG["QuickML RAG + Knowledge Base<br/>BriefFacts index"]
-    PIPE["QuickML Pipelines<br/>DBSCAN · time-series · anomaly"]
+    QAN["QuickML analytics provider<br/>time-series · anomaly"]
     ZIA["Zia<br/>OCR · language · voice fallback"]
     PDF["SmartBrowz<br/>conversation → PDF"]
   end
@@ -77,7 +77,7 @@ flowchart TB
   FR --> RAG
   FR --> DS
   FG --> DS
-  FA --> PIPE
+  FA --> QAN
   FA --> DS
   FS --> DS
   FT --> ZIA
@@ -129,7 +129,7 @@ flowchart LR
 | Circuits / Functions | Supervisor, typed task context, specialist agents, retries, and evidence verification |
 | QuickML LLM Serving | Catalyst QuickML GLM-4.7-Flash — SQL generation, answer composition, profiling |
 | QuickML RAG + Knowledge Base | Semantic search over `BriefFacts` with citation breakdown |
-| QuickML Pipelines | DBSCAN hotspots, time-series forecast, anomaly early-warning |
+| QuickML analytics provider | Optional aggregate time-series forecast/anomaly enhancement; deterministic DBSCAN and moving-average fallbacks remain local |
 | Zia | Language detect/normalise, OCR for legacy scans, voice STT fallback |
 | SmartBrowz | Conversation history → PDF |
 | Data Store | 23 schema tables + derived edge tables + MO index + silent-match alerts + append-only audit log |
@@ -349,9 +349,9 @@ tasks use Catalyst Functions. No non-Catalyst service is introduced.
 | Capability | Implementation |
 |---|---|
 | **Crime pattern discovery** (GraphRAG, Regime B) | GraphRAG fusion: structured filter → graph expansion over shared persons/sections/geo → `BriefFacts` semantic rerank → composed pattern with citations. Complemented by DBSCAN spatial clusters; repeat patterns fall out of the entity-resolution graph. |
-| **Trend detection** | Group-by roll-ups over `CrimeRegisteredDate` × `CrimeSubHeadID` × `PoliceStationID`; each station/type series is forecast independently, with QuickML time-series available as the live smoothing/seasonality enhancement. |
+| **Trend detection** | Group-by roll-ups over `CrimeRegisteredDate` × `CrimeSubHeadID` × `PoliceStationID`; each station/type series is forecast independently, with the validated QuickML aggregate provider available as the live smoothing/seasonality enhancement. |
 | **Hotspot map** | DBSCAN clusters rendered on a map view in the UI. |
-| **Predictive analytics & early warnings** | Per-station × crime-type baseline/forecast and bounded warning output; the local adapter uses a deterministic moving average and the live deployment may replace it with QuickML time-series/anomaly output. **Geographic/temporal only — never a per-person risk score.** |
+| **Predictive analytics & early warnings** | Per-station × crime-type baseline/forecast and bounded warning output; the local adapter uses a deterministic moving average and the live deployment may use the validated QuickML aggregate time-series/anomaly provider. **Geographic/temporal only — never a per-person risk score.** |
 | **Criminal network analysis** (GraphRAG, Regime B) | Graph traversal (k-hop, path) **plus community detection and centrality**, run as a Function (NetworkX or equivalent) over a snapshot of the edge tables — surfaces rings and brokers; GraphRAG composes the finding into a cited narrative. |
 | **Network visualization** | Function returns the subgraph for a person/case; frontend renders with a lightweight force-directed component. |
 | **Socio-demographic insights** | NL→SQL aggregates over `ComplainantDetails`/`Victim`/`Accused` demographics (age, gender, occupation; religion/caste only as aggregates to analyst/SP roles). **Guardrail: caste/religion are never features in any predictive or scoring model.** |

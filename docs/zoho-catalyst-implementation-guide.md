@@ -120,7 +120,7 @@ rows and model traces are never sent directly to the browser.
 | PDF conversation export | `operation=export` | `conversation_export.py` + SmartBrowz |
 | Audit viewer | `operation=audit` | `audit_api.py` and `policy_audit.py` |
 | Network view | `operation=network` | `graph.py` and derived edge tables |
-| Trends/hotspots | `operation=analytics` | per-station/type deterministic fallback, DBSCAN, scoped rows; live QuickML Pipeline remains an account-side enhancement |
+| Trends/hotspots | `operation=analytics` | per-station/type deterministic fallback, DBSCAN, scoped rows; validated QuickML aggregate provider remains an account-side enhancement |
 | Behavioral profile | `operation=profile` | cited visible case narratives and identity keys |
 | Demographics | `operation=demographics` | aggregate-only `ComplainantDetails`, `Victim`, and `Accused` rows |
 | Similar cases | `silent_match /similar-cases` | `MoMatcher` + OperationalMoIndex |
