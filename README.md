@@ -201,6 +201,11 @@ Generate the labelled offline contract baseline and evaluation slide:
 python -m tools.offline_eval
 ```
 
+The repository also includes [`catalyst-pipelines.yaml`](catalyst-pipelines.yaml)
+for Catalyst CI verification. It runs the offline suite, deployment preflight,
+silent-match packaging, and the disconnected demo replay; live account gates
+remain in [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
+
 The offline evaluator replays gold SQL and therefore measures execution and
 evidence plumbing, not live GLM-4.7 quality. Run the authenticated QuickML
 evaluation in the section below for model-quality numbers.

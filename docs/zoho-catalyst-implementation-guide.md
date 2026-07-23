@@ -175,6 +175,10 @@ The exact live smoke tests and known Catalyst account limitations are in
 [`CATALYST_RUNBOOK.md`](CATALYST_RUNBOOK.md). Silent-match indexing, rollback,
 and alert verification are detailed in
 [`silent-match-production-runbook.md`](silent-match-production-runbook.md).
+The root [`catalyst-pipelines.yaml`](../catalyst-pipelines.yaml) defines the
+offline verification stage used by Catalyst Pipelines; it intentionally does
+not pass `--require-live`, so account-side production gates remain explicit
+and cannot be bypassed by a green CI run.
 Local tests do not prove live
 ZCQL relationship configuration, authenticated principal mapping, QuickML
 credentials, SmartBrowz conversion, or embedding availability.
