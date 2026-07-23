@@ -12,6 +12,7 @@ def test_local_preflight_passes_structure_and_reports_live_warnings():
 
     assert report["ok"] is True
     assert report["live_ready"] is False
+    assert any(item["name"] == "catalyst_project_config" for item in report["checks"])
     names = {item["name"] for item in report["warnings"]}
     assert "catalyst_cli" in names
     assert any("EMBEDDINGS_ENDPOINT" in name for name in names)
@@ -78,6 +79,15 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
     }
     (root / "functions/crime_query/catalyst-config.json").write_text(json.dumps(config))
     (root / "functions/silent_match/catalyst-config.json").write_text(json.dumps(silent_config))
+    (root / "web").mkdir()
+    (root / "catalyst.json").write_text(json.dumps({
+        "functions": {
+            "targets": ["crime_query", "silent_match"],
+            "ignore": ["**/__pycache__/**", "*.pyc", ".DS_Store"],
+            "source": "functions",
+        },
+        "client": {"source": "web", "ignore": [".DS_Store"]},
+    }))
     from functions.crime_query.catalog import TABLES
     schema_tables = list(TABLES) + ["AuditLog"]
     (root / "docs/schema-ddl.sql").write_text(

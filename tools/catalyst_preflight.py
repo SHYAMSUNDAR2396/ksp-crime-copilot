@@ -107,6 +107,26 @@ def _security_rule(rules, function_name, path, methods):
     return False
 
 
+def _project_config(root):
+    """Validate the root manifest used by whole-project Catalyst deploys."""
+    path = root / "catalyst.json"
+    manifest, error = _read_json(path)
+    if error is not None:
+        return False, "root catalyst.json is missing or invalid"
+    functions = manifest.get("functions")
+    client = manifest.get("client")
+    if not isinstance(functions, dict) or not isinstance(client, dict):
+        return False, "functions and client sections are required"
+    if functions.get("source") != "functions":
+        return False, "functions source must be functions"
+    targets = functions.get("targets")
+    if targets != ["crime_query", "silent_match"]:
+        return False, "function targets must match the two deployed functions"
+    if not (root / str(client.get("source", ""))).is_dir():
+        return False, "client source directory is missing"
+    return True, "functions and web client targets configured"
+
+
 def run_preflight(root, require_live=False, catalyst_available=None):
     """Return a value-only readiness report for ``root``.
 
@@ -130,6 +150,8 @@ def run_preflight(root, require_live=False, catalyst_available=None):
         "crime_query": root / "functions/crime_query/catalyst-config.json",
         "silent_match": root / "functions/silent_match/catalyst-config.json",
     }
+    project_ok, project_detail = _project_config(root)
+    check("catalyst_project_config", project_ok, project_detail)
     configs = {}
     for name, path in config_paths.items():
         config, error = _read_json(path)

@@ -135,6 +135,11 @@ date. This keeps retrieval bounded and preserves batch/live scoring parity.
 
 ## 6. Catalyst configuration
 
+The repository root [`catalyst.json`](../catalyst.json) is the whole-project
+deployment manifest. It targets both Advanced I/O functions and the `web/`
+client; the function-specific `catalyst-config.json` files remain the source
+of each function's runtime and environment configuration.
+
 1. Create the official Data Store tables from [`schema-ddl.sql`](schema-ddl.sql),
    the operational tables from [`silent-match-alerts-ddl.sql`](silent-match-alerts-ddl.sql),
    and the versioned graph tables from [`derived-graph-ddl.sql`](derived-graph-ddl.sql).
