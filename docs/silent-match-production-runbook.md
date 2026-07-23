@@ -34,7 +34,8 @@ deployment. Do not commit tokens or narrative data.
 | `QUICKML_EMBEDDINGS_TIMEOUT` | Positive finite request timeout |
 | `QUICKML_EMBEDDINGS_BATCH_SIZE` | Positive provider batch limit |
 | `KSP_SILENT_MATCH_LOOKBACK_DAYS` | Positive historical candidate window; default 365 |
-| `KSP_AUTH_EMPLOYEE_MAP` | Authenticated Catalyst principal to trusted EmployeeID map |
+| `KSP_AUTH_EMPLOYEE_MAP` | Human Catalyst principal to trusted EmployeeID map |
+| `KSP_AUTH_SERVICE_MAP` | Job/event principal to a dedicated policy-scope EmployeeID map; required for scheduled triggers |
 
 The function obtains its short-lived OAuth token from Catalyst runtime
 credentials. No embedding API key belongs in source control.
@@ -123,7 +124,8 @@ same `SilentMatchScanner` scoring and repository path is used in both modes.
    in Data Store.
 2. Configure Authentication and the security rules in
    [`catalyst-security-rules.json`](catalyst-security-rules.json).
-3. Configure the embedding endpoint and principal map.
+3. Configure the embedding endpoint, human principal map, and separate
+   service-principal map. Never put `employee_id` in a job payload.
 4. Deploy the function:
 
    ```bash
@@ -136,6 +138,12 @@ same `SilentMatchScanner` scoring and repository path is used in both modes.
    FIR event for live scans. Use bounded retries and do not retry malformed
    payloads.
 7. Run the authenticated smoke tests below.
+
+Scheduled and post-ingestion invocations must use an explicitly mapped service
+principal. The service identity is accepted only by `/index`, `/scan`, and
+`/graph-projection`; browser routes remain human-principal-only. The mapped
+Employee row supplies rank-derived policy scope for the job, but does not turn
+the service into an officer session.
 
 ## Smoke tests
 

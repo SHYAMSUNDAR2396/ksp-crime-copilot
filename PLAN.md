@@ -189,6 +189,10 @@ offline evidence and do not close the authenticated Catalyst/QuickML gate.
 For proactive work, the same contract is invoked by a post-ingestion Function
 or Cron. `SilentMatchAgent` consumes structured, identity, graph, and semantic
 bundles, applies the bounded evidence scorer, and writes durable alert state.
+Scheduled and post-ingestion invocations resolve through a separate Catalyst
+service-principal mapping and a dedicated policy-scope Employee row; they do
+not accept a browser `employee_id` or impersonate an officer session. Service
+principals are restricted to index, scan, and graph-projection job routes.
 The future `Legal Deadline Agent` uses the same contract but is not part of the
 current committed feature set until its own spec is approved.
 

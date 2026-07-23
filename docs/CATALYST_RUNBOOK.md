@@ -49,8 +49,11 @@ and model/embedding endpoints.
 
 Before the curls, apply [`CATALYST_SECURITY.md`](CATALYST_SECURITY.md), set
 `KSP_AUTH_EMPLOYEE_MAP` in both function configurations, and authenticate the
-request. The deployed handlers discard `employee_id` from the request body;
-identity comes only from the Catalyst principal and its server-side mapping.
+request. Configure `KSP_AUTH_SERVICE_MAP` separately for Job Scheduling and
+post-ingestion identities. The deployed handlers discard `employee_id` from
+the request body; identity comes only from the Catalyst principal and its
+server-side mapping. Service identities are limited to silent-match job
+routes.
 
 For silent-match scans, keep `KSP_SILENT_MATCH_LOOKBACK_DAYS` explicitly set
 in `silent_match/catalyst-config.json` (default `365`). Batch anchors scan the

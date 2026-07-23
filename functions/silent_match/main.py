@@ -37,9 +37,17 @@ def handler(request):
 
     app = zcatalyst_sdk.initialize()
     api = build_api(app)
-    employee_id = auth.authenticated_employee_id(app, api.caller_loader)
+    principal = auth.authenticated_principal(app, api.caller_loader)
     raw_payload = request.get_json(silent=True)
     payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
-    payload["employee_id"] = employee_id
+    kind = principal.kind if principal is not None else None
+    payload["employee_id"] = (
+        principal.employee_id
+        if principal is not None and auth.principal_allowed_for_route(
+            kind, request.method, request.path
+        )
+        else None
+    )
+    payload["_principal_kind"] = kind
     status, body = api.handle(request.method, request.path, payload)
     return make_response(jsonify(body), status)

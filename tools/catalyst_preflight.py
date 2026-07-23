@@ -44,10 +44,12 @@ LIVE_CONFIG_KEYS = {
     "crime_query": (
         "QUICKML_ENDPOINT", "QUICKML_MODEL", "QUICKML_ORG_ID",
         "SMARTBROWZ_ENDPOINT", "QUICKML_RAG_ENDPOINT", "KSP_AUTH_EMPLOYEE_MAP",
+        "KSP_AUTH_SERVICE_MAP",
     ),
     "silent_match": (
         "QUICKML_ORG_ID", "QUICKML_EMBEDDINGS_ENDPOINT",
         "QUICKML_EMBEDDINGS_MODEL", "KSP_AUTH_EMPLOYEE_MAP",
+        "KSP_AUTH_SERVICE_MAP",
     ),
 }
 
@@ -146,7 +148,7 @@ def run_preflight(root, require_live=False, catalyst_available=None):
             if key.endswith("ENDPOINT"):
                 valid = _https_url(value) if value else False
                 detail = "HTTPS endpoint configured" if valid else "HTTPS endpoint is required"
-            elif key == "KSP_AUTH_EMPLOYEE_MAP":
+            elif key in ("KSP_AUTH_EMPLOYEE_MAP", "KSP_AUTH_SERVICE_MAP"):
                 valid = _auth_mapping(value)
                 detail = "non-empty principal mapping" if valid else "non-empty valid principal mapping is required"
             else:

@@ -262,6 +262,8 @@ run.
 The pure offline core accepts an employee identity for deterministic tests. The
 deployed Advanced I/O handler ignores any client-supplied employee identity and
 resolves the authenticated Catalyst principal through `KSP_AUTH_EMPLOYEE_MAP`.
+Scheduled and post-ingestion silent-match jobs use the separate
+`KSP_AUTH_SERVICE_MAP` and are restricted to maintenance routes.
 An authenticated request therefore sends:
 
 ```json
