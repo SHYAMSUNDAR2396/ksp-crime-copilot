@@ -27,6 +27,7 @@ CASE_PROJECTION = (
     "CaseMaster.CrimeRegisteredDate, CaseMaster.IncidentFromDate, "
         "Unit.UnitID AS PoliceStationID, Employee.EmployeeID AS PolicePersonID, "
         "ArrestEmployee.EmployeeID AS ArrestIOID, "
+        "CrimeHead.CrimeHeadID AS CrimeMajorHeadID, "
         "CrimeSubHead.CrimeSubHeadID AS CrimeMinorHeadID, CaseMaster.BriefFacts, "
     "CaseMaster.latitude, CaseMaster.longitude, District.DistrictID AS DistrictID, "
     "Accused.AccusedName, Accused.AgeYear, Accused.GenderID, "
@@ -38,6 +39,7 @@ CASE_PROJECTION = (
         "LEFT JOIN ArrestSurrender ON ArrestSurrender.CaseMasterID = CaseMaster.ROWID "
         "LEFT JOIN Employee AS ArrestEmployee ON ArrestSurrender.IOID = ArrestEmployee.ROWID "
         "LEFT JOIN CrimeSubHead ON CaseMaster.CrimeMinorHeadID = CrimeSubHead.ROWID "
+        "LEFT JOIN CrimeHead ON CaseMaster.CrimeMajorHeadID = CrimeHead.ROWID "
     "LEFT JOIN Accused ON Accused.CaseMasterID = CaseMaster.ROWID "
     "LEFT JOIN ActSectionAssociation "
     "ON ActSectionAssociation.CaseMasterID = CaseMaster.ROWID "
@@ -176,7 +178,7 @@ def _case_rows(db):
         case = cases.setdefault(case_id, {
             key: row.get(key) for key in (
                 "CaseMasterID", "CrimeNo", "CrimeRegisteredDate", "IncidentFromDate",
-                "PoliceStationID", "PolicePersonID", "CrimeMinorHeadID", "BriefFacts",
+                "PoliceStationID", "PolicePersonID", "CrimeMajorHeadID", "CrimeMinorHeadID", "BriefFacts",
                 "latitude", "longitude", "DistrictID",
             )
         })
@@ -312,7 +314,7 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
             return _refused("That citation is outside your authorised scope.", "SCOPE_DENIED")
         detail_fields = (
             "CaseMasterID", "CrimeNo", "CrimeRegisteredDate", "IncidentFromDate",
-            "PoliceStationID", "PolicePersonID", "CrimeMinorHeadID", "BriefFacts",
+            "PoliceStationID", "PolicePersonID", "CrimeMajorHeadID", "CrimeMinorHeadID", "BriefFacts",
             "latitude", "longitude", "DistrictID",
         )
         data = {

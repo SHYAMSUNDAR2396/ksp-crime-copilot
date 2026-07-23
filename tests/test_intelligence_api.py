@@ -16,6 +16,8 @@ def test_fixed_projections_translate_catalyst_rowids_to_business_ids():
     assert "Unit.UnitID AS PoliceStationID" in intelligence_api.CASE_PROJECTION
     assert "District.DistrictID AS DistrictID" in intelligence_api.CASE_PROJECTION
     assert "ArrestEmployee.EmployeeID AS ArrestIOID" in intelligence_api.CASE_PROJECTION
+    assert "CrimeHead.CrimeHeadID AS CrimeMajorHeadID" in intelligence_api.CASE_PROJECTION
+    assert "CaseMaster.CrimeMajorHeadID = CrimeHead.ROWID" in intelligence_api.CASE_PROJECTION
 
 
 def test_network_operation_returns_cited_scope_safe_data(tmp_path):
