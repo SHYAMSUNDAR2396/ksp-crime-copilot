@@ -26,6 +26,7 @@ TREND_START = dt.date(2026, 4, 1)
 CLUSTER_CENTRE = (12.9850, 77.6600)
 CLUSTER_RADIUS_DEG = 0.0018  # ~200 m at Bengaluru's latitude
 RAVI_SPELLINGS = ["Ravi Kumar", "Ravi K", "R. Kumar", "Ravikumar"]
+DEMO_CASE_IDS = {}
 
 STATES = [(1, "Karnataka", 1, 1)]
 DISTRICTS = [(1, "Bengaluru City", 1, 1), (2, "Mysuru", 1, 1), (3, "Belagavi", 1, 1)]
@@ -363,6 +364,29 @@ def build(sqlite_path, csv_dir=None, seed=SEED):
     for spelling, case_id in zip(RAVI_SPELLINGS, variant_targets):
         accused_rows.append((accused_id, case_id, spelling, 31, 1, "A9"))
         accused_id += 1
+
+    # Deterministic Kannada/English MO pair for the cross-lingual retrieval
+    # demo. Only BriefFacts changes; schema shape, counts, and foreign keys do
+    # not change.
+    burglary_ids = [row[0] for row in cases if row[9] == 4]
+    bilingual_ids = tuple(burglary_ids[:2])
+    if len(bilingual_ids) == 2:
+        for position, case_id in enumerate(bilingual_ids):
+            row_index = case_id - 1
+            row = cases[row_index]
+            narrative = (
+                "ಬಾಗಿಲು ಮುರಿದು ಮನೆಗೆ ಪ್ರವೇಶಿಸಿ ಚಿನ್ನಾಭರಣ ಮತ್ತು ನಗದು ಕಳವು ಮಾಡಲಾಗಿದೆ."
+                if position == 0
+                else "House lock broken; gold ornaments and cash were taken from the residence."
+            )
+            cases[row_index] = row[:-1] + (narrative,)
+
+    DEMO_CASE_IDS.clear()
+    DEMO_CASE_IDS.update({
+        "ravi_variants": tuple(variant_targets),
+        "bilingual_mo_pair": bilingual_ids,
+        "hotspot_candidates": tuple(row[0] for row in cases if row[9] == 4)[:CLUSTER_CASES],
+    })
 
     data["CaseMaster"] = cases
     data["ComplainantDetails"] = complainants

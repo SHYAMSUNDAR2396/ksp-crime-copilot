@@ -1,0 +1,48 @@
+{
+  "version": "silent-match-jobs-v1",
+  "function": "silent_match",
+  "service_principal_map_env": "KSP_AUTH_SERVICE_MAP",
+  "client_identity_field": "employee_id",
+  "contracts": [
+    {
+      "name": "mo_index_refresh",
+      "method": "POST",
+      "route": "/index",
+      "trigger": "scheduled",
+      "principal": "service_or_command_user",
+      "fields": ["index_version", "changed_case_ids", "trigger_source"],
+      "required_fields": ["index_version"],
+      "retry": {"max_attempts": 3, "malformed_payload": "no_retry"}
+    },
+    {
+      "name": "graph_projection_refresh",
+      "method": "POST",
+      "route": "/graph-projection",
+      "trigger": "scheduled",
+      "principal": "service_or_command_user",
+      "fields": ["projection_version", "changed_case_ids", "trigger_source"],
+      "required_fields": ["projection_version"],
+      "retry": {"max_attempts": 3, "malformed_payload": "no_retry"}
+    },
+    {
+      "name": "batch_silent_match_scan",
+      "method": "POST",
+      "route": "/scan",
+      "trigger": "scheduled",
+      "principal": "service_or_command_user",
+      "fields": ["date_window", "trigger_source"],
+      "required_fields": ["date_window", "trigger_source"],
+      "retry": {"max_attempts": 3, "malformed_payload": "no_retry"}
+    },
+    {
+      "name": "completed_fir_silent_match_scan",
+      "method": "POST",
+      "route": "/scan",
+      "trigger": "completed_fir",
+      "principal": "service_or_command_user",
+      "fields": ["anchor_case_id", "trigger_source"],
+      "required_fields": ["anchor_case_id", "trigger_source"],
+      "retry": {"max_attempts": 3, "malformed_payload": "no_retry"}
+    }
+  ]
+}

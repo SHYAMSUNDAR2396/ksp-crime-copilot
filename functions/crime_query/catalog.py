@@ -272,6 +272,13 @@ CASE_SCOPED_TABLES = frozenset({
 
 ALLOWED_FUNCTIONS = frozenset({"COUNT", "SUM", "AVG", "MIN", "MAX"})
 
+OPERATIONAL_TABLES = frozenset({
+    "SilentMatchAlert", "SilentMatchRecipient", "SilentMatchAction",
+    "SilentMatchRun", "MoEmbeddingRecord", "MoEmbeddingJobState",
+    "PersonNode", "PersonMember", "EdgePersonCase", "EdgeCaseEmployee",
+    "EdgeCaseSection", "EdgeCaseNear", "GraphProjectionState",
+})
+
 # Mandated by PLAN.md 1.5. Absent from TABLES on purpose: the LLM must never see it.
 AUDIT_TABLE = "AuditLog"
 AUDIT_COLUMNS = {
@@ -315,16 +322,176 @@ def sqlite_ddl():
     statements.append(
         'CREATE TABLE IF NOT EXISTS "{0}" (\n  {1}\n);'.format(AUDIT_TABLE, audit_cols)
     )
-    return "\n\n".join(statements)
+    return "\n\n".join(statements) + "\n\n" + operational_ddl()
+
+
+def operational_ddl():
+    """DDL for fixed operational tables, intentionally outside TABLES."""
+    return """
+CREATE TABLE IF NOT EXISTS "SilentMatchAlert" (
+  "AlertID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "AlertType" TEXT NOT NULL,
+  "AnchorCaseID" INTEGER NOT NULL,
+  "MatchedCaseID" INTEGER NOT NULL,
+  "AnchorCrimeNo" TEXT NOT NULL,
+  "MatchedCrimeNo" TEXT NOT NULL,
+  "Score" INTEGER NOT NULL,
+  "ConfidenceBand" TEXT NOT NULL,
+  "Status" TEXT NOT NULL DEFAULT 'New',
+  "EvidenceJSON" TEXT NOT NULL,
+  "EvidenceSnapshotJSON" TEXT NOT NULL,
+  "SourceRunID" TEXT NOT NULL,
+  "IndexVersion" TEXT NOT NULL DEFAULT '',
+  "CreatedAt" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("AlertType", "AnchorCaseID", "MatchedCaseID")
+);
+CREATE INDEX IF NOT EXISTS "idx_SilentMatchAlert_Status" ON "SilentMatchAlert" ("Status");
+CREATE TABLE IF NOT EXISTS "SilentMatchRecipient" (
+  "RecipientID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "AlertID" INTEGER NOT NULL,
+  "EmployeeID" INTEGER NOT NULL,
+  "SeenAt" TEXT,
+  UNIQUE ("AlertID", "EmployeeID")
+);
+CREATE TABLE IF NOT EXISTS "SilentMatchAction" (
+  "ActionID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "AlertID" INTEGER NOT NULL,
+  "ActionType" TEXT NOT NULL,
+  "Note" TEXT NOT NULL,
+  "EmployeeID" INTEGER NOT NULL,
+  "CreatedAt" TEXT NOT NULL,
+  "PreviousScore" INTEGER,
+  "PreviousConfidenceBand" TEXT,
+  "EvidenceSnapshotJSON" TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS "SilentMatchRun" (
+  "RunID" TEXT PRIMARY KEY,
+  "TriggerSource" TEXT NOT NULL,
+  "Status" TEXT NOT NULL,
+  "AnchorsSeen" INTEGER NOT NULL DEFAULT 0,
+  "CandidatesSeen" INTEGER NOT NULL DEFAULT 0,
+  "AlertsCreated" INTEGER NOT NULL DEFAULT 0,
+  "StartedAt" TEXT NOT NULL,
+  "FinishedAt" TEXT
+);
+CREATE TABLE IF NOT EXISTS "MoEmbeddingRecord" (
+  "EmbeddingID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "CaseMasterID" INTEGER NOT NULL,
+  "CrimeNo" TEXT NOT NULL,
+  "IndexVersion" TEXT NOT NULL,
+  "Provider" TEXT NOT NULL,
+  "VectorJSON" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  "Status" TEXT NOT NULL DEFAULT 'indexed',
+  "FailureCount" INTEGER NOT NULL DEFAULT 0,
+  "LastError" TEXT NOT NULL DEFAULT '',
+  UNIQUE ("CaseMasterID", "IndexVersion")
+);
+CREATE INDEX IF NOT EXISTS "idx_MoEmbeddingRecord_CaseVersion"
+  ON "MoEmbeddingRecord" ("CaseMasterID", "IndexVersion");
+CREATE TABLE IF NOT EXISTS "MoEmbeddingJobState" (
+  "StateID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "CaseMasterID" INTEGER NOT NULL,
+  "IndexVersion" TEXT NOT NULL,
+  "Status" TEXT NOT NULL,
+  "FailureCount" INTEGER NOT NULL DEFAULT 0,
+  "UpdatedAt" TEXT NOT NULL,
+  "LastError" TEXT NOT NULL DEFAULT '',
+  UNIQUE ("CaseMasterID", "IndexVersion")
+);
+CREATE INDEX IF NOT EXISTS "idx_MoEmbeddingJobState_Version"
+  ON "MoEmbeddingJobState" ("IndexVersion", "Status");
+CREATE INDEX IF NOT EXISTS "idx_SilentMatchAction_Alert" ON "SilentMatchAction" ("AlertID");
+CREATE TABLE IF NOT EXISTS "PersonNode" (
+  "NodeID" TEXT NOT NULL,
+  "NormalizedName" TEXT NOT NULL,
+  "AgeBand" INTEGER NOT NULL,
+  "GenderID" TEXT,
+  "Confidence" REAL NOT NULL,
+  "ResolutionVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("NodeID", "ResolutionVersion")
+);
+CREATE TABLE IF NOT EXISTS "PersonMember" (
+  "MemberID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "NodeID" TEXT NOT NULL,
+  "CaseMasterID" INTEGER NOT NULL,
+  "Role" TEXT NOT NULL,
+  "SourceName" TEXT NOT NULL,
+  "AgeYear" INTEGER,
+  "GenderID" TEXT,
+  "SourceCrimeNo" TEXT NOT NULL,
+  "ResolutionVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("NodeID", "CaseMasterID", "Role", "ResolutionVersion")
+);
+CREATE TABLE IF NOT EXISTS "EdgePersonCase" (
+  "EdgeID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "NodeID" TEXT NOT NULL,
+  "CaseMasterID" INTEGER NOT NULL,
+  "Role" TEXT NOT NULL,
+  "Confidence" REAL NOT NULL,
+  "SourceCrimeNo" TEXT NOT NULL,
+  "ResolutionVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("NodeID", "CaseMasterID", "Role", "ResolutionVersion")
+);
+CREATE TABLE IF NOT EXISTS "EdgeCaseEmployee" (
+  "EdgeID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "CaseMasterID" INTEGER NOT NULL,
+  "EmployeeID" INTEGER NOT NULL,
+  "Role" TEXT NOT NULL,
+  "Confidence" REAL NOT NULL,
+  "SourceCrimeNo" TEXT NOT NULL,
+  "ResolutionVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("CaseMasterID", "EmployeeID", "Role", "ResolutionVersion")
+);
+CREATE TABLE IF NOT EXISTS "EdgeCaseSection" (
+  "EdgeID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "CaseMasterID" INTEGER NOT NULL,
+  "SectionID" TEXT NOT NULL,
+  "Confidence" REAL NOT NULL,
+  "SourceCrimeNo" TEXT NOT NULL,
+  "ResolutionVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("CaseMasterID", "SectionID", "ResolutionVersion")
+);
+CREATE TABLE IF NOT EXISTS "EdgeCaseNear" (
+  "EdgeID" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "CaseMasterID" INTEGER NOT NULL,
+  "RelatedCaseID" INTEGER NOT NULL,
+  "DistanceKm" REAL NOT NULL,
+  "Confidence" REAL NOT NULL,
+  "SourceCrimeNos" TEXT NOT NULL,
+  "ResolutionVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL,
+  UNIQUE ("CaseMasterID", "RelatedCaseID", "ResolutionVersion")
+);
+CREATE TABLE IF NOT EXISTS "GraphProjectionState" (
+  "ProjectionName" TEXT PRIMARY KEY,
+  "ActiveVersion" TEXT NOT NULL,
+  "UpdatedAt" TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "idx_EdgePersonCase_CaseVersion"
+  ON "EdgePersonCase" ("CaseMasterID", "ResolutionVersion");
+CREATE INDEX IF NOT EXISTS "idx_EdgeCaseNear_CaseVersion"
+  ON "EdgeCaseNear" ("CaseMasterID", "ResolutionVersion");
+""".strip()
 
 
 def describe():
-    """Compact schema text for the NL->SQL prompt."""
+    """Compact case-schema text for the NL-to-ZCQL prompt."""
     lines = []
     for table, columns in TABLES.items():
         lines.append("{0}({1})".format(table, ", ".join(columns)))
-    lines.append("")
-    lines.append("Foreign keys (every join must target ROWID, see rule below):")
+    return "\n".join(lines)
+
+
+def describe_foreign_keys():
+    """Render the live Catalyst relationship contract for the prompt."""
+    lines = ["Catalyst Foreign Key joins (child column -> parent ROWID):"]
     for child_t, child_c, parent_t, _parent_c in FOREIGN_KEYS:
         lines.append(
             "  {0}.{1} -> {2}.ROWID".format(child_t, child_c, parent_t)

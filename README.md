@@ -23,9 +23,18 @@ The system is deliberately evidence-led:
 
 The repository contains a working Python query backend, deterministic synthetic data generator, SQLite test path, Catalyst Advanced I/O entrypoint, SQL validation, RBAC, translation helpers, citation checks, and test/evaluation harnesses.
 
-The broader product plan covers the Catalyst-hosted chatbot, browser voice interface, multi-agent supervisor, cross-lingual MO matching, derived graph visualization, and cross-jurisdiction silent-match alerts. These capabilities are specified in `PLAN.md` and the linked design/implementation documents; some remain deployment or frontend work rather than completed local modules.
+The broader product plan covers the Catalyst-hosted chatbot, browser voice interface, multi-agent supervisor, cross-lingual MO matching, derived graph visualization, and cross-jurisdiction silent-match alerts. These capabilities are specified in `PLAN.md` and linked implementation documents; many are implemented locally while live Catalyst readiness remains an account-level gate documented in [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
 
-Live Catalyst deployment has been exercised, but the end-to-end smoke tests still have a documented ZCQL foreign-key/`ROWID` integration gap. See [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md) before treating the live path as fully closed.
+The current workspace has not re-verified live Catalyst readiness: CLI access,
+authenticated principal mapping, RAG/embedding endpoints, and authenticated
+smoke execution remain deployment gates. See [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md)
+before treating the live path as fully closed.
+
+The disconnected backup demo is replayable with synthetic data through
+[`docs/DEMO_REPLAY.md`](docs/DEMO_REPLAY.md); its current nine-beat transcript
+is [`docs/demo-replay.json`](docs/demo-replay.json). The offline synthetic
+contract baseline and live-measurement boundary are recorded in
+[`docs/evaluation-slide.md`](docs/evaluation-slide.md).
 
 ## Main Capabilities
 
@@ -114,7 +123,7 @@ flowchart LR
 
 ## Data Model
 
-The authoritative schema is [`Police_FIR_ER_Diagram.md`](Police_FIR_ER_Diagram.md). It is a 23-table relational CCTNS-style model centered on `CaseMaster`.
+The authoritative schema is [`Police_FIR_ER_Diagram.md`](Police_FIR_ER_Diagram.md). It is a 26-table relational CCTNS-style model centered on `CaseMaster`.
 
 Important schema constraints:
 
@@ -130,7 +139,8 @@ Important schema constraints:
 ```text
 functions/crime_query/       Catalyst Advanced I/O Python function
   main.py                    Request handler and query orchestration
-  agent.py                   NL-to-SQL execution and answer verification
+  agent.py                   NL-to-SQL preparation and answer verification
+  supervisor_runtime.py      bounded typed specialist fan-out and composition
   catalog.py                 Schema catalog, DDL, identifying/sensitive columns
   db.py                      SQLite and Catalyst Data Store adapters
   llm.py                     QuickML LLM client
@@ -179,6 +189,26 @@ python -m tools.gen_data --sqlite build/crime.db --csv build/csv
 
 The generator creates 5,000 synthetic cases and deliberately seeds patterns used by tests and demonstrations, including two-wheeler theft trends, a burglary cluster, and name variants such as `Ravi Kumar`, `Ravi K`, `R. Kumar`, and `Ravikumar`.
 
+Generate the disconnected backup replay and its transcript:
+
+```bash
+python -m tools.demo_replay
+```
+
+Generate the labelled offline contract baseline and evaluation slide:
+
+```bash
+python -m tools.offline_eval
+```
+
+The repository also includes [`catalyst-pipelines.yaml`](catalyst-pipelines.yaml)
+for Catalyst CI verification. It runs the offline suite, deployment preflight,
+silent-match packaging, and the disconnected demo replay; live account gates
+remain in [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
+
+The offline evaluator replays gold SQL and therefore measures execution and
+evidence plumbing, not live GLM-4.7 quality. Run the authenticated QuickML
+evaluation in the section below for model-quality numbers.
 ## Evaluation
 
 The evaluation harness compares generated and gold SQL by executing both and comparing result sets. It reports accuracy, hallucination rate, and p95 latency.
@@ -202,23 +232,69 @@ Deploy the query function after authenticating the Catalyst CLI and configuring 
 catalyst deploy --only functions:crime_query
 ```
 
-The function uses Python 3.9 and pins `zcatalyst-sdk==1.3.0` in [`functions/crime_query/requirements.txt`](functions/crime_query/requirements.txt). QuickML endpoint and organization settings are configured through [`functions/crime_query/catalyst-config.json`](functions/crime_query/catalyst-config.json); do not commit tokens or API keys.
+The function uses Python 3.9 and pins `zcatalyst-sdk==1.3.0` in [`functions/crime_query/requirements.txt`](functions/crime_query/requirements.txt). QuickML GLM-4.7 endpoint/model and organization settings, plus the SmartBrowz PDF endpoint, are configured through [`functions/crime_query/catalyst-config.json`](functions/crime_query/catalyst-config.json); do not commit tokens or API keys. The deployed function obtains short-lived OAuth tokens from Catalyst runtime credentials.
 
 For table creation, CSV import, Catalyst foreign-key remapping, smoke tests, known deployment behavior, and the current live blocker, follow [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
 
+Run the repository-only preflight before deploying. It validates the schema,
+operational DDL, security rules, function configuration, GLM-4.7 selection,
+and deployment shape without printing configuration values:
+
+```bash
+python -m tools.catalyst_preflight
+python -m tools.catalyst_preflight --require-live
+```
+
+The first command is expected to pass locally with warnings when account-side
+gates are absent. The second also checks that the Catalyst CLI session is
+authenticated and must pass before calling the deployment live-ready.
+
+For a single guarded release flow after authentication and live configuration,
+run the package-only check first, then add `--deploy`:
+
+```bash
+python -m tools.catalyst_release --project crime-copilot
+python -m tools.catalyst_release --project crime-copilot --deploy
+```
+
+This command fails closed before packaging or deployment when any live gate is
+missing.
+
+After deployment, use the opt-in redacted smoke runner instead of copying
+tokens or response bodies into shell history:
+
+```bash
+export KSP_CRIME_QUERY_URL="https://..."
+export KSP_SILENT_MATCH_URL="https://..."
+export CATALYST_TOKEN="..."
+python -m tools.catalyst_smoke --execute
+```
+
+Add `--include-scan` only when a synthetic batch scan is intentionally being
+run.
+
 ## Current Query Contract
 
-The current Advanced I/O handler accepts JSON with a question and employee identity:
+The pure offline core accepts an employee identity for deterministic tests. The
+deployed Advanced I/O handler ignores any client-supplied employee identity and
+resolves the authenticated Catalyst principal through `KSP_AUTH_EMPLOYEE_MAP`.
+Scheduled and post-ingestion silent-match jobs use the separate
+`KSP_AUTH_SERVICE_MAP` and are restricted to maintenance routes.
+An authenticated request therefore sends:
 
 ```json
 {
-  "employee_id": 9,
   "question": "How many two-wheeler thefts were reported in Bengaluru East?"
 }
 ```
 
 Responses include refusal status, answer text, generated SQL when safe, rows, citations, filter citations, hallucinated crime numbers, and detected language. The planned chatbot and voice contract adds `session_id`, `turn_id`, `input_mode`, `language_segments`, and `response_language` while preserving the same query and authorization path.
 
+The same authenticated function also accepts `operation: "network"`,
+`"analytics"`, `"profile"`, or `"demographics"`. These return scope-checked
+graph/aggregate/profile data with an evidence envelope; network and profile
+operations require `case_master_id`, while demographic dimensions are a fixed
+allowlist and sensitive dimensions remain rank-gated aggregate views.
 ## Security and Data Handling
 
 - Never commit OAuth tokens, API keys, production exports, or real case data.
@@ -234,6 +310,9 @@ Responses include refusal status, answer text, generated SQL when safe, rows, ci
 
 - [`PLAN.md`](PLAN.md): current architecture, Catalyst service map, multi-agent execution plan, capabilities, risks, demo, and definition of done.
 - [`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md): live Catalyst setup, imports, deployment, smoke tests, and known gaps.
+- [`docs/zoho-catalyst-implementation-guide.md`](docs/zoho-catalyst-implementation-guide.md): implemented agent stack, Catalyst service map, feature contracts, deployment, and readiness checklist.
+- [`docs/silent-match-production-runbook.md`](docs/silent-match-production-runbook.md): MO index versioning, scan jobs, rollback, and live alert smoke tests.
+- [`docs/catalyst-job-contracts.json`](docs/catalyst-job-contracts.json): validated scheduled and post-ingestion job payload contracts.
 - [`docs/schema-ddl.sql`](docs/schema-ddl.sql): local SQLite/Catalyst-oriented DDL.
 - [`docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md`](docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md): provider-neutral chatbot/voice architecture, turn cancellation, stale-response protection, and rollout.
 - [`docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md`](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md): Kannada-English MO matching.

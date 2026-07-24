@@ -204,3 +204,16 @@ def test_generation_is_byte_for_byte_reproducible(tmp_path):
     first = digest(tmp_path / "a")
     second = digest(tmp_path / "b")
     assert first == second
+
+
+def test_demo_case_ids_include_bilingual_pair_and_replay_seeds(built):
+    assert len(gen_data.DEMO_CASE_IDS["bilingual_mo_pair"]) == 2
+    assert len(gen_data.DEMO_CASE_IDS["ravi_variants"]) == 4
+    assert gen_data.DEMO_CASE_IDS["hotspot_candidates"]
+    conn, _, _ = built
+    rows = conn.execute(
+        'SELECT BriefFacts FROM "CaseMaster" WHERE CaseMasterID IN (?, ?)',
+        gen_data.DEMO_CASE_IDS["bilingual_mo_pair"],
+    ).fetchall()
+    assert any("ಬಾಗಿಲು" in row[0] for row in rows)
+    assert any("House lock" in row[0] for row in rows)

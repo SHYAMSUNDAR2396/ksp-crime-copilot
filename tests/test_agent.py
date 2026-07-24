@@ -47,6 +47,11 @@ def test_verify_citations_strips_invented_numbers():
     assert "1" * 18 in text
 
 
+def test_crime_numbers_ignore_bundle_style_pair_rows():
+    rows = [{"CrimeNo": "1" * 18}, {"pairs": (("CrimeNo", "2" * 18),)}]
+    assert agent.crime_numbers(rows) == ["1" * 18]
+
+
 def test_row_level_answer_cites_returned_crimenos(db):
     sql = (
         "SELECT CaseMaster.CrimeNo FROM CaseMaster "

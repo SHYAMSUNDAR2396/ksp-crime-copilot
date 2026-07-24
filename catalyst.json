@@ -1,0 +1,23 @@
+{
+  "functions": {
+    "targets": [
+      "crime_query",
+      "silent_match"
+    ],
+    "ignore": [
+      "**/__pycache__/**",
+      "*.pyc",
+      ".DS_Store"
+    ],
+    "source": "functions",
+    "scripts": {
+      "predeploy": "python tools/prepare_catalyst_deploy.py"
+    }
+  },
+  "client": {
+    "source": "web",
+    "ignore": [
+      ".DS_Store"
+    ]
+  }
+}

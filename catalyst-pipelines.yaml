@@ -1,0 +1,16 @@
+version: 1
+
+stages:
+  - name: verify
+    jobs:
+      - offline_verification
+
+jobs:
+  offline_verification:
+    steps:
+      - python3 -m pip install -r requirements.txt
+      - python3 -m pytest -q
+      - python3 -m tools.catalyst_preflight
+      - python3 -m tools.prepare_catalyst_deploy
+      - python3 -m tools.demo_replay
+      - python3 -m tools.demo_check

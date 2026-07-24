@@ -50,6 +50,7 @@ def doc_tables():
 
 def test_catalog_table_names_match_document(doc_tables):
     assert set(catalog.TABLES) == set(doc_tables)
+    assert len(doc_tables) == 26
 
 
 def test_catalog_columns_match_document(doc_tables):
@@ -105,3 +106,16 @@ def test_describe_mentions_every_table(doc_tables):
     described = catalog.describe()
     for table in doc_tables:
         assert table in described
+
+
+def test_describe_foreign_keys_uses_catalyst_parent_rowids():
+    described = catalog.describe_foreign_keys()
+    assert "Catalyst Foreign Key joins (child column -> parent ROWID)" in described
+    assert "CaseMaster.PoliceStationID -> Unit.ROWID" in described
+    assert "CaseMaster.PoliceStationID -> Unit.UnitID" not in described
+
+
+def test_operational_tables_are_not_part_of_nl_catalog():
+    assert "SilentMatchAlert" not in catalog.TABLES
+    assert "SilentMatchAlert" in catalog.OPERATIONAL_TABLES
+    assert "CREATE TABLE IF NOT EXISTS \"SilentMatchAlert\"" in catalog.operational_ddl()

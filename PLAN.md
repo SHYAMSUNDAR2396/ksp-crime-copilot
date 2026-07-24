@@ -7,11 +7,35 @@ Companion strategy document: [Technical Report](KSP-Datathon2026-Conversational-
 
 Current production implementation plans: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md) and [Rank-Derived Capability RBAC](docs/superpowers/plans/2026-07-21-rank-derived-capability-rbac.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md), [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md), [rank-derived capability RBAC](docs/superpowers/specs/2026-07-21-rank-derived-capability-rbac-design.md), and [provider-neutral voice interaction architecture](docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md).
 
+### Current implementation status — 2026-07-24
+
+The repository is **demo-ready and Catalyst-integrable**. The disconnected demo
+gate passes all nine beats, the Catalyst project/function manifests and security
+rules pass offline preflight, and the application is pinned to Catalyst QuickML
+GLM-4.7-Flash (`crm-di-glm47b_30b_it`). The production gate remains open until a
+live Catalyst account supplies the authenticated principal maps, QuickML RAG /
+analytics / embeddings endpoints, Catalyst CLI deployment access, live smoke
+results, and the account-side Data Store relationship verification described in
+[`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
+
+Demo verification command:
+
+```bash
+source .venv/bin/activate
+python -m tools.demo_check --sqlite build/demo-crime.db --output docs/demo-replay.json
+```
+
+The production handoff uses the same command with `--require-live`; it exits
+non-zero until the Catalyst account-side gates are configured and verified.
+
+The command is intentionally offline and redacted; `ok: true` proves the
+replayable demo and deployment artifacts, not production account readiness.
+
 ---
 
 ## 1. Revised architecture (schema-grounded)
 
-The provided schema is a fully relational CCTNS-style model: 23 tables centred on `CaseMaster`, with the **only free text in `CaseMaster.BriefFacts`** and geo as `latitude`/`longitude`. There are **no phone, vehicle, address, or bank-account entities, and no cross-case person IDs**. Four consequences drive everything below:
+The provided schema is a fully relational CCTNS-style model: 26 tables centred on `CaseMaster`, with the **only free text in `CaseMaster.BriefFacts`** and geo as `latitude`/`longitude`. There are **no phone, vehicle, address, or bank-account entities, and no cross-case person IDs**. Four consequences drive everything below:
 
 1. **NL→SQL is the primary engine.** "Burglaries in Bengaluru East in the last 6 months" is a structured query, not a RAG question.
 2. **Document RAG shrinks to `BriefFacts`** — semantic "find similar cases" over case narratives.
@@ -50,15 +74,15 @@ flowchart TB
   end
 
   subgraph AI["INTELLIGENCE — QuickML + Zia + SmartBrowz"]
-    LLM["QuickML LLM Serving<br/>Qwen 2.5-14B"]
+    LLM["QuickML LLM Serving<br/>GLM-4.7-Flash"]
     RAG["QuickML RAG + Knowledge Base<br/>BriefFacts index"]
-    PIPE["QuickML Pipelines<br/>DBSCAN · time-series · anomaly"]
+    QAN["QuickML analytics provider<br/>time-series · anomaly"]
     ZIA["Zia<br/>OCR · language · voice fallback"]
     PDF["SmartBrowz<br/>conversation → PDF"]
   end
 
   subgraph DATA["DATA"]
-    DS[("Data Store<br/>23 tables + edge tables + audit log")]
+    DS[("Data Store<br/>26 tables + edge tables + audit log")]
     CA[("Cache<br/>session context")]
     ST[("Stratus<br/>PDF / blob store")]
   end
@@ -77,7 +101,7 @@ flowchart TB
   FR --> RAG
   FR --> DS
   FG --> DS
-  FA --> PIPE
+  FA --> QAN
   FA --> DS
   FS --> DS
   FT --> ZIA
@@ -112,7 +136,7 @@ flowchart LR
   TASKS -. relevant agents in parallel .-> ANL["Analytics Agent<br/>DBSCAN · forecast"]
   SQLQ & RET & GRP & ANL --> ENV["EvidenceBundles<br/>claims · citations · confidence · limits"]
   ENV --> VER["Verification + Citation Agent<br/>merge · conflict check · RBAC"]
-  VER --> COMP["Composition Agent<br/>Qwen 2.5-14B"]
+  VER --> COMP["Composition Agent<br/>GLM-4.7-Flash"]
   COMP --> BACK["Translation Agent<br/>IDs/names verbatim"]
   BACK --> OUT["Answer + citations<br/>(chat + voice, + PDF on request)"]
   AUTHZ -. every request .-> AUD[("Audit log<br/>Data Store")]
@@ -127,12 +151,12 @@ flowchart LR
 | Authentication | Login; role derived from `Rank.Hierarchy` + `Employee.UnitID`/`DistrictID` |
 | API Gateway | Zero-trust authZ, throttling, audit hook on every call |
 | Circuits / Functions | Supervisor, typed task context, specialist agents, retries, and evidence verification |
-| QuickML LLM Serving | Qwen 2.5-14B — SQL generation, answer composition, profiling |
+| QuickML LLM Serving | Catalyst QuickML GLM-4.7-Flash — SQL generation, answer composition, profiling |
 | QuickML RAG + Knowledge Base | Semantic search over `BriefFacts` with citation breakdown |
-| QuickML Pipelines | DBSCAN hotspots, time-series forecast, anomaly early-warning |
+| QuickML analytics provider | Optional aggregate time-series forecast/anomaly enhancement; deterministic DBSCAN and moving-average fallbacks remain local |
 | Zia | Language detect/normalise, OCR for legacy scans, voice STT fallback |
 | SmartBrowz | Conversation history → PDF |
-| Data Store | 23 schema tables + derived edge tables + MO index + silent-match alerts + append-only audit log |
+| Data Store | 26 schema tables + derived edge tables + MO index + silent-match alerts + append-only audit log |
 | Cache | Per-session conversation context for follow-ups |
 | Stratus | Blob/PDF storage |
 | Cron / Job Scheduling | Edge-table rebuild, MO index refresh, batch alert scans, and forecast refresh |
@@ -171,16 +195,40 @@ reported in `limitations[]`; they are never silently averaged. The Composition
 Agent receives verified claims only, and the Translation Agent renders the
 final answer while preserving names and `CrimeNo`s verbatim.
 
+The local execution contract is implemented by
+`functions/crime_query/supervisor_runtime.py`: isolated specialists are
+bounded by per-agent timeouts and retry budgets, failures are reduced to stable
+codes, the task deadline is propagated into specialist and composition waits,
+and composition runs only after the merged evidence envelope. The
+SQLite adapter uses inline execution because its connection is thread-bound;
+the Catalyst ZCQL adapter selects the bounded parallel path, while an account
+with separately deployed specialist Functions/Circuits can replace those
+handlers without changing the evidence contract.
+
+The nine-beat disconnected backup is executable through
+`tools/demo_replay.py`; it writes the synthetic, redacted transcript at
+`docs/demo-replay.json` and verifies the same application boundaries used by
+the live path. `tools/offline_eval.py` writes the labelled synthetic contract
+baseline and `docs/evaluation-slide.md`. These artifacts are explicitly
+offline evidence and do not close the authenticated Catalyst/QuickML gate.
+
 For proactive work, the same contract is invoked by a post-ingestion Function
 or Cron. `SilentMatchAgent` consumes structured, identity, graph, and semantic
 bundles, applies the bounded evidence scorer, and writes durable alert state.
+Scheduled and post-ingestion invocations resolve through a separate Catalyst
+service-principal mapping and a dedicated policy-scope Employee row; they do
+not accept a browser `employee_id` or impersonate an officer session. Service
+principals are restricted to index, scan, and graph-projection job routes.
+The executable trigger contract is maintained in
+`docs/catalyst-job-contracts.json` and enforced by the runtime payload
+validators plus the offline Catalyst preflight.
 The future `Legal Deadline Agent` uses the same contract but is not part of the
 current committed feature set until its own spec is approved.
 
 ### 1.1 Structured layer (primary)
 
-- All 23 tables loaded into **Catalyst Data Store** exactly as per the ER diagram.
-- **Query Agent = NL→SQL**: the prompt to Qwen 2.5-14B (QuickML LLM Serving) contains the schema description plus the *actual lookup values* (CrimeHead/SubHead names, CaseStatus values, district and station names, Act short-names) so the model maps "murder" → `CrimeSubHead.CrimeHeadName='Murder'` and "Bengaluru East" → the right `Unit`/`District` IDs without guessing.
+- All 26 tables loaded into **Catalyst Data Store** exactly as per the ER diagram.
+- **Query Agent = NL→SQL**: the prompt to Catalyst QuickML GLM-4.7-Flash contains the schema description plus the *actual lookup values* (CrimeHead/SubHead names, CaseStatus values, district and station names, Act short-names) so the model maps "murder" → `CrimeSubHead.CrimeHeadName='Murder'` and "Bengaluru East" → the right `Unit`/`District` IDs without guessing.
 - **Validation layer before execution**: generated SQL is parsed and checked against an allowlist of tables/columns/functions; anything outside it is rejected and re-prompted. SELECT-only, always scoped by the caller's RBAC filter (§1.5). This is the NL→SQL hallucination guard.
 - Every structured answer cites the `CrimeNo`s (and aggregate counts cite the filter used), rendered as clickable citations.
 
@@ -325,13 +373,13 @@ tasks use Catalyst Functions. No non-Catalyst service is introduced.
 | Capability | Implementation |
 |---|---|
 | **Crime pattern discovery** (GraphRAG, Regime B) | GraphRAG fusion: structured filter → graph expansion over shared persons/sections/geo → `BriefFacts` semantic rerank → composed pattern with citations. Complemented by DBSCAN spatial clusters; repeat patterns fall out of the entity-resolution graph. |
-| **Trend detection** | Group-by roll-ups over `CrimeRegisteredDate` × `CrimeSubHeadID` × `PoliceStationID`; QuickML time-series for smoothing/seasonality. |
+| **Trend detection** | Group-by roll-ups over `CrimeRegisteredDate` × `CrimeSubHeadID` × `PoliceStationID`; each station/type series is forecast independently, with the validated QuickML aggregate provider available as the live smoothing/seasonality enhancement. |
 | **Hotspot map** | DBSCAN clusters rendered on a map view in the UI. |
-| **Predictive analytics & early warnings** | QuickML time-series/anomaly forecast of next-period case counts per station × crime type; alert when actual or forecast crosses threshold vs. historical baseline. **Geographic/temporal only — never a per-person risk score.** |
+| **Predictive analytics & early warnings** | Per-station × crime-type baseline/forecast and bounded warning output; the local adapter uses a deterministic moving average and the live deployment may use the validated QuickML aggregate time-series/anomaly provider. **Geographic/temporal only — never a per-person risk score.** |
 | **Criminal network analysis** (GraphRAG, Regime B) | Graph traversal (k-hop, path) **plus community detection and centrality**, run as a Function (NetworkX or equivalent) over a snapshot of the edge tables — surfaces rings and brokers; GraphRAG composes the finding into a cited narrative. |
 | **Network visualization** | Function returns the subgraph for a person/case; frontend renders with a lightweight force-directed component. |
 | **Socio-demographic insights** | NL→SQL aggregates over `ComplainantDetails`/`Victim`/`Accused` demographics (age, gender, occupation; religion/caste only as aggregates to analyst/SP roles). **Guardrail: caste/religion are never features in any predictive or scoring model.** |
-| **Behavioral profiling** | Per `PersonNode`: assemble all linked cases (sections, times, geo, `BriefFacts`), Qwen composes a cited narrative profile — "common thread" summary, not a black-box score. |
+| **Behavioral profiling** | Per `PersonNode`: assemble all linked cases (sections, times, geo, `BriefFacts`), GLM-4.7 composes a cited narrative profile — "common thread" summary, not a black-box score. |
 | **Proactive prevention intelligence** | Synthesis briefing for command roles: rising-trend hotspots joined with active repeat offenders nearby ("burglaries in this cluster 40% above baseline; 2 repeat offenders with cases in range"). Decision-support only, fully logged, never an automated trigger. |
 | **Cross-jurisdiction silent-match alerts** | Post-ingestion or Cron creates a supervisor task; structured, identity, graph, and cross-lingual MO agents run in parallel; `SilentMatchAgent` scores bounded evidence, deduplicates by alert type + unordered case pair, routes to authorized case owners and district command, and exposes the same durable alert in inbox/chat. |
 | **Statutory deadline risk** | Reserved `Legal Deadline Agent` contract for BNSS 60/90-day calculations; not in the current committed feature set until its own legal/data spec is approved. Missing dates/classification must yield `unknown`, never a guessed deadline. |
@@ -446,7 +494,7 @@ flowchart LR
 | ZCQL can't express needed joins/aggregates | Med | Early Catalyst capability check | Precomputed denormalised views at ingestion; Functions-side join composition |
 | NL→SQL hallucinates columns/values | High | Eval failures | Allowlist validation + re-prompt; lookup values in prompt; SELECT-only |
 | Entity-resolution false positives | Med | Wrong links in rehearsal | Curated seeds guarantee true positives; confidence shown on every link; use exact normalised-name matching for affected cases |
-| Qwen Kannada generation weak | High (known) | Kannada answers garbled | English-pivot bridge is the design; names/IDs passed through verbatim |
+| GLM-4.7 Kannada generation weak | High (known) | Kannada answers garbled | English-pivot bridge is the design; names/IDs passed through verbatim |
 | QuickML RAG has no chat history | Certain (known) | — | Multi-turn context is app-layer by design: session state in Catalyst Cache (§1.6) |
 | QuickML quotas/latency too tight for live demo | Med | Early Catalyst capability check | Cache pre-staged demo queries; trim dataset; recorded backup |
 | Specialist fan-out exceeds latency or Catalyst concurrency limits | Med | p95 task latency or throttling during rehearsal | Capability-based dispatch, per-agent deadlines, bounded parallelism, Cache for repeated evidence, Circuits for durable retries, and a verified partial-result policy |
@@ -496,6 +544,6 @@ flowchart LR
 - All planned features pass in a full run-through **on Catalyst, not localhost**, with documented fallback behavior where an external dependency is unavailable.
 - Batch and post-ingestion live silent-match scans produce identical evidence for identical fixtures and do not duplicate alerts.
 - Cross-lingual MO matches return original Kannada/English excerpts, both `CrimeNo`s, and model/index version.
-- Recorded backup demo exists.
-- Eval numbers computed and on the slide.
+- A replayable synthetic backup demo exists at [docs/DEMO_REPLAY.md](docs/DEMO_REPLAY.md), with a nine-beat transcript at [docs/demo-replay.json](docs/demo-replay.json); this is the disconnected fallback artifact and does not substitute for the required recorded backup demo.
+- Offline contract eval numbers are computed and on [docs/evaluation-slide.md](docs/evaluation-slide.md); live GLM/Catalyst numbers must be appended after the account-side run.
 - Every table/column referenced in code exists in [Police_FIR_ER_Diagram.md](Police_FIR_ER_Diagram.md) — no invented schema.

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'">
+  <title>KSP Crime Copilot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Karnataka State Police</p>
+        <h1>Crime Copilot</h1>
+      </div>
+      <span id="role-badge" class="badge">Catalyst session required</span>
+    </header>
+    <section id="conversation" class="conversation" aria-live="polite">
+      <div class="empty-state">Ask a cited question about authorised case data.</div>
+    </section>
+    <section class="intelligence-tools" aria-labelledby="tools-title">
+      <div class="tools-heading">
+        <div>
+          <p class="eyebrow">Verified intelligence views</p>
+          <h2 id="tools-title">Explore authorised context</h2>
+        </div>
+        <label class="case-picker">Case ID
+          <input id="case-id" type="number" min="1" inputmode="numeric" placeholder="For network view">
+        </label>
+      </div>
+      <div class="tool-actions">
+        <button id="network-view" type="button" class="secondary">Network view</button>
+        <button id="analytics-view" type="button" class="secondary">Trends &amp; hotspots</button>
+        <button id="profile-view" type="button" class="secondary">Case profile</button>
+        <button id="narrative-view" type="button" class="secondary">Search narratives</button>
+        <label class="case-picker">Demographic
+          <select id="demographic-dimension">
+            <option value="AgeYear">Age</option>
+            <option value="GenderID">Gender</option>
+            <option value="OccupationID">Occupation</option>
+            <option value="ReligionID">Religion (authorised aggregate)</option>
+            <option value="CasteID">Caste (authorised aggregate)</option>
+          </select>
+        </label>
+        <button id="demographics-view" type="button" class="secondary">Aggregates</button>
+        <button id="audit-view" type="button" class="secondary">Audit viewer</button>
+        <button id="alerts-view" type="button" class="secondary">Alert inbox</button>
+        <button id="export-view" type="button" class="secondary">Export conversation</button>
+      </div>
+      <div id="intelligence-output" class="intelligence-output" aria-live="polite">
+        Select a view to load scope-checked evidence.
+      </div>
+    </section>
+    <form id="composer" class="composer">
+      <textarea id="question" rows="2" placeholder="Ask in English, ಕನ್ನಡ, or mixed language…" required></textarea>
+      <div class="composer-actions">
+        <button id="mic" type="button" class="secondary" aria-label="Start voice input">🎙 Speak</button>
+        <button type="submit" class="primary">Send</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </form>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

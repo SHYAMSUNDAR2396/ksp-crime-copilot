@@ -8,7 +8,7 @@ Planning documents for **Datathon 2026, KSP SCRB Challenge 01** — a conversati
 
 ## Document map
 
-- **`Police_FIR_ER_Diagram.md`** — the authoritative, provided database schema (23 tables, CCTNS-style, centred on `CaseMaster`). Any code written later must reference only tables/columns that exist in this file; do not invent schema.
+- **`Police_FIR_ER_Diagram.md`** — the authoritative, provided database schema (26 tables, CCTNS-style, centred on `CaseMaster`). Any code written later must reference only tables/columns that exist in this file; do not invent schema.
 - **`PLAN.md`** — the execution plan, schema-grounded. **This supersedes the technical report's §04–§08 architecture wherever the real schema contradicts it.** Treat `PLAN.md` as the current source of truth for architecture, scope, and cut lines.
 - **`KSP-Datathon2026-Conversational-AI-Technical-Report.html`** — the earlier strategy document (broader state-of-the-art survey, jury-facing framing). Still useful for problem framing, persona analysis, and evaluation-metric rationale, but its architecture sections are provisional and were narrowed once the real schema arrived.
 

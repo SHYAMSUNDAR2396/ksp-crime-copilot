@@ -1,4 +1,5 @@
 import csv
+import pytest
 
 from tools.catalyst_fk_remap import build_rowid_map, remap_csv
 
@@ -26,6 +27,18 @@ def test_build_rowid_map_reads_a_catalyst_export_csv(tmp_path):
     mapping = build_rowid_map(str(export_path), "RankID")
 
     assert mapping == {"1": "48091000000037038", "4": "48091000000037041"}
+
+
+def test_build_rowid_map_rejects_duplicate_business_keys(tmp_path):
+    export_path = tmp_path / "Table-Rank.csv"
+    _write_csv(
+        export_path,
+        ["ROWID", "RankID"],
+        [["row-1", "4"], ["row-2", "4"]],
+    )
+
+    with pytest.raises(ValueError, match="duplicate"):
+        build_rowid_map(str(export_path), "RankID")
 
 
 def test_remap_csv_rewrites_only_the_target_column(tmp_path):
@@ -72,3 +85,15 @@ def test_remap_csv_leaves_unmapped_values_untouched(tmp_path):
         rows = list(csv.DictReader(handle))
     assert rows[0]["RankID"] == ""
     assert rows[1]["RankID"] == "999"
+
+
+def test_strict_remap_rejects_nonempty_unmapped_values(tmp_path):
+    child_in = tmp_path / "Employee.csv"
+    child_out = tmp_path / "Employee_remapped.csv"
+    _write_csv(child_in, ["EmployeeID", "RankID"], [["1", "999"]])
+
+    with pytest.raises(ValueError, match="unmapped"):
+        remap_csv(
+            str(child_in), str(child_out), "RankID", {"4": "row-4"}, strict=True,
+        )
+    assert not child_out.exists()

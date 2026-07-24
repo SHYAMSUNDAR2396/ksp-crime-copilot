@@ -38,8 +38,14 @@ def allowed_units(caller, db):
     if caller.rank_hierarchy <= STATEWIDE_MAX_HIERARCHY:
         return None
     if caller.rank_hierarchy <= DISTRICT_MAX_HIERARCHY:
-        return db.units_in_district(caller.district_id)
-    return [caller.unit_id]
+        business_units = db.units_in_district(caller.district_id)
+    else:
+        business_units = [caller.unit_id]
+    # Catalyst FK columns store parent ROWIDs. Fixed application views expose
+    # business identifiers, but the generated CaseMaster scope predicate is
+    # applied to CaseMaster.PoliceStationID itself, so translate here.
+    mapper = getattr(db, "unit_rowids_for_business_ids", None)
+    return mapper(business_units) if mapper is not None else business_units
 
 
 def _projection_column_nodes(select):
@@ -58,6 +64,13 @@ def _group_column_nodes(select):
 
 
 def _dotted(column, aliases):
+    # sqlglot represents a validated SELECT-list alias in ORDER BY as an
+    # unqualified Column (for example ``ORDER BY n``). It is not a source
+    # table field and therefore cannot be a sensitive column reference. Keep
+    # it as its bare name so the masking walk remains total instead of
+    # raising KeyError after validation has already accepted the query.
+    if not column.table:
+        return column.name
     return "{0}.{1}".format(aliases[column.table], column.name)
 
 

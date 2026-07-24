@@ -5,7 +5,25 @@
 		"type": "advancedio",
 		"env_variables": {
 			"QUICKML_ENDPOINT": "https://api.catalyst.zoho.in/quickml/v1/project/48091000000038006/glm/chat",
-			"QUICKML_ORG_ID": "60075198995"
+			"QUICKML_MODEL": "crm-di-glm47b_30b_it",
+			"QUICKML_ORG_ID": "60075198995",
+			"KSP_TASK_DEADLINE_MS": "8000",
+			"SMARTBROWZ_ENDPOINT": "https://api.catalyst.zoho.in/browser360/v1/project/48091000000038006/convert",
+			"QUICKML_RAG_ENDPOINT": "",
+			"QUICKML_RAG_MODEL": "brief-facts-rag-v1",
+			"QUICKML_RAG_TIMEOUT": "10",
+			"QUICKML_RAG_MAX_DOCUMENTS": "500",
+			"QUICKML_ANALYTICS_ENDPOINT": "",
+			"QUICKML_ANALYTICS_MODEL": "crime-trend-v1",
+			"QUICKML_ANALYTICS_TIMEOUT": "10",
+			"QUICKML_EMBEDDINGS_ENDPOINT": "",
+			"QUICKML_EMBEDDINGS_MODEL": "multilingual-v1",
+			"QUICKML_EMBEDDINGS_INDEX_VERSION": "mo-index-v1",
+			"QUICKML_EMBEDDINGS_TIMEOUT": "10",
+			"QUICKML_EMBEDDINGS_BATCH_SIZE": "32",
+			"KSP_SILENT_MATCH_LOOKBACK_DAYS": "365",
+			"KSP_AUTH_EMPLOYEE_MAP": "{}",
+			"KSP_AUTH_SERVICE_MAP": "{}"
 		}
 	},
 	"execution": {

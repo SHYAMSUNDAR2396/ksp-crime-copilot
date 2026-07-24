@@ -1,0 +1,40 @@
+{
+  "advancedio": {
+    "crime_query": [
+      {
+        ".*": {
+          "methods": ["POST"],
+          "authentication": "required"
+        }
+      }
+    ],
+    "silent_match": [
+      {
+        "/similar-cases": {
+          "methods": ["POST"],
+          "authentication": "required"
+        },
+        "/alerts": {
+          "methods": ["GET"],
+          "authentication": "required"
+        },
+        "/alerts/.*": {
+          "methods": ["GET", "POST"],
+          "authentication": "required"
+        },
+        "/scan": {
+          "methods": ["POST"],
+          "authentication": "required"
+        },
+        "/index": {
+          "methods": ["POST"],
+          "authentication": "required"
+        },
+        "/graph-projection": {
+          "methods": ["POST"],
+          "authentication": "required"
+        }
+      }
+    ]
+  }
+}
