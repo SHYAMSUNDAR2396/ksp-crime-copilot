@@ -10,14 +10,16 @@ import argparse
 import json
 import os
 import re
+import sqlite3
 import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
 try:
-    from functions.crime_query.catalog import TABLES
+    from functions.crime_query.catalog import TABLES, sqlite_ddl
 except ImportError:  # pragma: no cover - standalone Catalyst packaging
     TABLES = {}
+    sqlite_ddl = None
 
 try:
     from .catalyst_job_contracts import validate_manifest
@@ -136,6 +138,71 @@ def _project_config(root):
     return True, "functions and web client targets configured"
 
 
+def _schema_snapshot(sql):
+    """Return table-to-column names for the SQLite-compatible checked-in DDL."""
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.executescript(sql)
+        tables = {}
+        for (name,) in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ):
+            if str(name).startswith("sqlite_"):
+                continue
+            columns = tuple(
+                row[1] for row in connection.execute(
+                    'PRAGMA table_info("{}")'.format(str(name).replace('"', '""'))
+                )
+            )
+            tables[str(name)] = columns
+        return tables, None
+    except sqlite3.Error:
+        return {}, "DDL is not executable as a schema contract"
+    finally:
+        connection.close()
+
+
+def _schema_contract(root):
+    """Ensure checked-in deployment DDL matches the application catalog."""
+    if not callable(sqlite_ddl):
+        return False, "application schema catalog is unavailable"
+    paths = (
+        root / "docs/schema-ddl.sql",
+        root / "docs/silent-match-alerts-ddl.sql",
+        root / "docs/derived-graph-ddl.sql",
+    )
+    if any(not path.is_file() for path in paths):
+        return False, "one or more schema DDL files are missing"
+    actual, error = _schema_snapshot(
+        "\n".join(path.read_text(encoding="utf-8") for path in paths)
+    )
+    if error:
+        return False, error
+    expected, error = _schema_snapshot(sqlite_ddl())
+    if error:
+        return False, "application schema catalog is invalid"
+    missing_tables = sorted(set(expected) - set(actual))
+    extra_tables = sorted(set(actual) - set(expected))
+    if missing_tables or extra_tables:
+        detail = []
+        if missing_tables:
+            detail.append("missing tables: " + ", ".join(missing_tables))
+        if extra_tables:
+            detail.append("unexpected tables: " + ", ".join(extra_tables))
+        return False, "; ".join(detail)
+    for table in sorted(expected):
+        missing_columns = sorted(set(expected[table]) - set(actual[table]))
+        extra_columns = sorted(set(actual[table]) - set(expected[table]))
+        if missing_columns or extra_columns:
+            detail = []
+            if missing_columns:
+                detail.append("missing columns: " + ", ".join(missing_columns))
+            if extra_columns:
+                detail.append("unexpected columns: " + ", ".join(extra_columns))
+            return False, "{} schema drift; {}".format(table, "; ".join(detail))
+    return True, "checked-in DDL matches application schema catalog"
+
+
 def run_preflight(root, require_live=False, catalyst_available=None):
     """Return a value-only readiness report for ``root``.
 
@@ -241,6 +308,9 @@ def run_preflight(root, require_live=False, catalyst_available=None):
     for table in REQUIRED_GRAPH_TABLES:
         check("derived_graph_table_{}".format(table), table in graph_text,
               "derived graph table present")
+
+    schema_ok, schema_detail = _schema_contract(root)
+    check("schema_contract", schema_ok, schema_detail)
 
     rules, error = _read_json(root / "docs/catalyst-security-rules.json")
     check("security_rules_json", error is None, "valid security rules" if error is None else error)

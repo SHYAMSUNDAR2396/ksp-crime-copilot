@@ -1,7 +1,8 @@
 import json
+import shutil
 from pathlib import Path
 
-from tools.catalyst_preflight import _project_config, run_preflight
+from tools.catalyst_preflight import _project_config, _schema_contract, run_preflight
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,25 @@ def test_project_config_rejects_incomplete_web_client(tmp_path):
 
     assert ok is False
     assert "client assets" in detail
+
+
+def test_schema_contract_rejects_missing_operational_column(tmp_path):
+    (tmp_path / "docs").mkdir()
+    for name in (
+        "schema-ddl.sql", "silent-match-alerts-ddl.sql", "derived-graph-ddl.sql",
+    ):
+        shutil.copy2(ROOT / "docs" / name, tmp_path / "docs" / name)
+    operational = tmp_path / "docs/silent-match-alerts-ddl.sql"
+    text = operational.read_text(encoding="utf-8")
+    operational.write_text(
+        text.replace("  Status TEXT NOT NULL DEFAULT 'New',\n", ""),
+        encoding="utf-8",
+    )
+
+    ok, detail = _schema_contract(tmp_path)
+
+    assert ok is False
+    assert "SilentMatchAlert" in detail
 
 
 def test_local_preflight_passes_structure_and_reports_live_warnings():
@@ -107,21 +127,10 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
         },
         "client": {"source": "web", "ignore": [".DS_Store"]},
     }))
-    from functions.crime_query.catalog import TABLES
-    schema_tables = list(TABLES) + ["AuditLog"]
-    (root / "docs/schema-ddl.sql").write_text(
-        "\n".join('CREATE TABLE "{}";'.format(name) for name in schema_tables)
-    )
-    (root / "docs/silent-match-alerts-ddl.sql").write_text(
-        "CREATE TABLE SilentMatchAlert; CREATE TABLE MoEmbeddingRecord; "
-        "CREATE TABLE MoEmbeddingJobState;"
-    )
-    (root / "docs/derived-graph-ddl.sql").write_text(
-        " ".join("CREATE TABLE {};".format(name) for name in (
-            "PersonNode", "PersonMember", "EdgePersonCase", "EdgeCaseEmployee",
-            "EdgeCaseSection", "EdgeCaseNear", "GraphProjectionState",
-        ))
-    )
+    for name in (
+        "schema-ddl.sql", "silent-match-alerts-ddl.sql", "derived-graph-ddl.sql",
+    ):
+        shutil.copy2(ROOT / "docs" / name, root / "docs" / name)
     rules = {
         "advancedio": {
             "crime_query": [{".*": {"methods": ["POST"], "authentication": "required"}}],
