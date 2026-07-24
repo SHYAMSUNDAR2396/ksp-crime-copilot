@@ -501,6 +501,9 @@ For each relationship identified above, repeat this sequence
      --child CaseMaster --child-col PoliceStationID \
      --child-pk CaseMasterID
    ```
+   The remap is strict by default: it refuses to write or import an output
+   file when any non-empty child value has no parent ROWID mapping. Use
+   `--allow-unmapped` only for a reviewed nullable/fixture migration.
 4. **Verify:** `catalyst ds:export --table <ChildTable>` and spot-check a
    few rows' remapped column against the parent's actual ROWID.
 

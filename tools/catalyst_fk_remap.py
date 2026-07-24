@@ -31,19 +31,36 @@ def build_rowid_map(export_csv_path, parent_col):
     mapping = {}
     with open(export_csv_path, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
-            mapping[row[parent_col]] = row["ROWID"]
+            business_key = row[parent_col]
+            rowid = row["ROWID"]
+            if not business_key or not rowid:
+                raise ValueError("parent export contains an empty business key or ROWID")
+            if business_key in mapping and mapping[business_key] != rowid:
+                raise ValueError("parent export contains a duplicate business key")
+            mapping[business_key] = rowid
     return mapping
 
 
-def remap_csv(child_csv_in, child_csv_out, child_col, rowid_map):
+def remap_csv(child_csv_in, child_csv_out, child_col, rowid_map, strict=False):
     """Rewrite one column of a child table's CSV from business-key values
     to the parent's ROWID. Values with no entry in rowid_map (NULL FKs,
-    or a parent row genuinely absent) are left untouched -- the caller is
-    responsible for deciding whether that's expected."""
+    or a parent row genuinely absent) are left untouched when ``strict`` is
+    false. Production CLI execution is strict by default and rejects any
+    non-empty unmapped value before writing an output file."""
     with open(child_csv_in, newline="", encoding="utf-8") as src:
         reader = csv.DictReader(src)
         rows = list(reader)
         fieldnames = reader.fieldnames
+    unmapped = {
+        row[child_col] for row in rows
+        if row[child_col] not in (None, "") and row[child_col] not in rowid_map
+    }
+    if strict and unmapped:
+        raise ValueError(
+            "child export contains {} unmapped non-empty foreign-key value(s)".format(
+                len(unmapped)
+            )
+        )
     for row in rows:
         if row[child_col] in rowid_map:
             row[child_col] = rowid_map[row[child_col]]
@@ -76,6 +93,10 @@ def main():
                               "must already be marked 'Is Unique' in the console")
     parser.add_argument("--csv-dir", default="build/csv", help="Where the original child CSV lives")
     parser.add_argument("--work-dir", default="build/fk_remap", help="Scratch directory for this script")
+    parser.add_argument(
+        "--allow-unmapped", action="store_true",
+        help="allow non-empty child FK values missing from the parent export (unsafe)",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.work_dir, exist_ok=True)
@@ -106,7 +127,10 @@ def main():
     print("== Step 3: remap the child CSV ==")
     child_csv_in = os.path.join(args.csv_dir, "{0}.csv".format(args.child))
     child_csv_out = os.path.join(args.work_dir, "{0}_fk_remapped.csv".format(args.child))
-    remap_csv(child_csv_in, child_csv_out, args.child_col, rowid_map)
+    remap_csv(
+        child_csv_in, child_csv_out, args.child_col, rowid_map,
+        strict=not args.allow_unmapped,
+    )
 
     print("== Step 4: upsert-reimport {0} ==".format(args.child))
     config_path = os.path.join(args.work_dir, "{0}_upsert_config.json".format(args.child))
