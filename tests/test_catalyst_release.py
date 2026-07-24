@@ -62,5 +62,7 @@ def test_release_deploys_only_after_preflight_and_packaging(tmp_path, monkeypatc
     assert report["deployed"] is True
     assert report["deploy_status"] == "passed"
     assert calls == [
-        "prepare", ["catalyst", "--project", "crime-copilot", "deploy"],
+        "prepare", [
+            "catalyst", "--non-interactive", "--project", "crime-copilot", "deploy",
+        ],
     ]

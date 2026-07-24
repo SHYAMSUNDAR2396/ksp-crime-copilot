@@ -246,7 +246,8 @@ python -m tools.catalyst_preflight --require-live
 ```
 
 The first command is expected to pass locally with warnings when account-side
-gates are absent. The second must pass before calling the deployment live-ready.
+gates are absent. The second also checks that the Catalyst CLI session is
+authenticated and must pass before calling the deployment live-ready.
 
 For a single guarded release flow after authentication and live configuration,
 run the package-only check first, then add `--deploy`:

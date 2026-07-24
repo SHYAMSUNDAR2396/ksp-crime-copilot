@@ -12,6 +12,7 @@ import os
 import re
 import sqlite3
 import shutil
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -110,6 +111,31 @@ def _security_rule(rules, function_name, path, methods):
     return False
 
 
+def _catalyst_authenticated():
+    """Check the local CLI session without printing account information."""
+    try:
+        result = subprocess.run(
+            ["catalyst", "whoami", "--non-interactive"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    output = str(result.stdout or "").lower()
+    unauthenticated_markers = (
+        "not logged in",
+        "haven't logged in",
+        "login failure",
+        "please use catalyst login",
+    )
+    return result.returncode == 0 and not any(
+        marker in output for marker in unauthenticated_markers
+    )
+
+
 def _project_config(root):
     """Validate the root manifest used by whole-project Catalyst deploys."""
     path = root / "catalyst.json"
@@ -203,7 +229,12 @@ def _schema_contract(root):
     return True, "checked-in DDL matches application schema catalog"
 
 
-def run_preflight(root, require_live=False, catalyst_available=None):
+def run_preflight(
+    root,
+    require_live=False,
+    catalyst_available=None,
+    catalyst_authenticated=None,
+):
     """Return a value-only readiness report for ``root``.
 
     ``catalyst_available`` is injectable so tests do not depend on a developer
@@ -336,6 +367,16 @@ def run_preflight(root, require_live=False, catalyst_available=None):
     if catalyst_available is None:
         catalyst_available = shutil.which("catalyst") is not None
     check("catalyst_cli", catalyst_available, "Catalyst CLI available", live_gate=True)
+    if catalyst_authenticated is None:
+        catalyst_authenticated = (
+            _catalyst_authenticated() if catalyst_available else False
+        )
+    check(
+        "catalyst_authentication",
+        catalyst_authenticated,
+        "authenticated Catalyst CLI session",
+        live_gate=True,
+    )
 
     live_gate_missing = [
         item for item in warnings + failures if item["live_gate"]

@@ -19,9 +19,10 @@ python -m tools.catalyst_preflight
 python -m tools.catalyst_preflight --require-live
 ```
 
-The second command must return exit code 0, followed by the authenticated
-deployment and smoke tests in this document, before production readiness is
-claimed.
+The second command must return exit code 0. It checks both the presence of the
+Catalyst CLI and an authenticated CLI session, in addition to the account-side
+endpoints and principal maps. Follow it with the deployment and smoke tests in
+this document before production readiness is claimed.
 
 Once the live gate is configured, use the guarded release command. It prepares
 the independently deployed `silent_match` vendor bundle and only invokes the

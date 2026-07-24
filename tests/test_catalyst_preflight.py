@@ -1,7 +1,9 @@
 import json
 import shutil
+from types import SimpleNamespace
 from pathlib import Path
 
+from tools import catalyst_preflight
 from tools.catalyst_preflight import _project_config, _schema_contract, run_preflight
 
 
@@ -62,6 +64,45 @@ def test_live_preflight_fails_closed_without_account_side_gates():
     assert any("EMBEDDINGS_ENDPOINT" in name for name in failed)
     assert any("RAG_ENDPOINT" in name for name in failed)
     assert any("AUTH_EMPLOYEE_MAP" in name for name in failed)
+
+
+def test_live_preflight_fails_closed_when_catalyst_cli_is_not_authenticated():
+    report = run_preflight(
+        ROOT,
+        require_live=True,
+        catalyst_available=True,
+        catalyst_authenticated=False,
+    )
+
+    assert report["ok"] is False
+    assert report["live_ready"] is False
+    assert "catalyst_authentication" in {
+        item["name"] for item in report["failures"]
+    }
+
+
+def test_catalyst_authentication_handles_cli_zero_exit_login_error(monkeypatch):
+    monkeypatch.setattr(
+        catalyst_preflight.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="Not logged in yet. To login use catalyst login.",
+            stderr="",
+        ),
+    )
+    assert catalyst_preflight._catalyst_authenticated() is False
+
+    monkeypatch.setattr(
+        catalyst_preflight.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="authenticated-user@example.invalid",
+            stderr="",
+        ),
+    )
+    assert catalyst_preflight._catalyst_authenticated() is True
 
 
 def test_preflight_does_not_emit_configuration_values(capsys):
@@ -150,7 +191,12 @@ def test_preflight_accepts_complete_synthetic_live_configuration(tmp_path):
         source_manifest.read_text(encoding="utf-8"), encoding="utf-8"
     )
 
-    report = run_preflight(root, require_live=True, catalyst_available=True)
+    report = run_preflight(
+        root,
+        require_live=True,
+        catalyst_available=True,
+        catalyst_authenticated=True,
+    )
     assert report["ok"] is True
     assert report["live_ready"] is True
     assert report["failures"] == []

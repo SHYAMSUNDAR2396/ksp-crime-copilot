@@ -53,7 +53,7 @@ def run_release(root, project=None, deploy=False, runner=subprocess.run):
             "failures": [],
         }
 
-    command = ["catalyst"]
+    command = ["catalyst", "--non-interactive"]
     if project:
         command.extend(["--project", str(project)])
     command.append("deploy")
