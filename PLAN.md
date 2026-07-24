@@ -7,6 +7,27 @@ Companion strategy document: [Technical Report](KSP-Datathon2026-Conversational-
 
 Current production implementation plans: [Cross-Lingual MO Matching + Silent-Match Alerts](docs/superpowers/plans/2026-07-21-cross-lingual-silent-match-alerts.md) and [Rank-Derived Capability RBAC](docs/superpowers/plans/2026-07-21-rank-derived-capability-rbac.md). Related designs: [cross-lingual semantic MO matching](docs/superpowers/specs/2026-07-21-cross-lingual-semantic-mo-matching-design.md), [cross-jurisdiction silent-match alerts](docs/superpowers/specs/2026-07-18-cross-jurisdiction-silent-match-alerts-design.md), [rank-derived capability RBAC](docs/superpowers/specs/2026-07-21-rank-derived-capability-rbac-design.md), and [provider-neutral voice interaction architecture](docs/superpowers/specs/2026-07-22-voice-interaction-architecture-design.md).
 
+### Current implementation status — 2026-07-24
+
+The repository is **demo-ready and Catalyst-integrable**. The disconnected demo
+gate passes all nine beats, the Catalyst project/function manifests and security
+rules pass offline preflight, and the application is pinned to Catalyst QuickML
+GLM-4.7-Flash (`crm-di-glm47b_30b_it`). The production gate remains open until a
+live Catalyst account supplies the authenticated principal maps, QuickML RAG /
+analytics / embeddings endpoints, Catalyst CLI deployment access, live smoke
+results, and the account-side Data Store relationship verification described in
+[`docs/CATALYST_RUNBOOK.md`](docs/CATALYST_RUNBOOK.md).
+
+Demo verification command:
+
+```bash
+source .venv/bin/activate
+python -m tools.demo_check --sqlite build/demo-crime.db --output docs/demo-replay.json
+```
+
+The command is intentionally offline and redacted; `ok: true` proves the
+replayable demo and deployment artifacts, not production account readiness.
+
 ---
 
 ## 1. Revised architecture (schema-grounded)
