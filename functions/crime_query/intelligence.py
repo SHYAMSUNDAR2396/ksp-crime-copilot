@@ -3,10 +3,12 @@ import math
 from dataclasses import asdict
 
 try:
+    from . import access
     from .access import require_capability
     from .analytics import dbscan_hotspots, early_warning, prevention_brief, series_warnings, trend_rollup
     from .graph import build_derived_edges, network_metrics, person_resolution_key, traverse
 except ImportError:  # pragma: no cover
+    import access
     from access import require_capability
     from analytics import dbscan_hotspots, early_warning, prevention_brief, series_warnings, trend_rollup
     from graph import build_derived_edges, network_metrics, person_resolution_key, traverse
@@ -121,10 +123,8 @@ def _case_visible(context, case_rows, case_id):
         return False
     station = row.get("PoliceStationID")
     district = row.get("DistrictID")
-    return (
-        station is not None and district is not None
-        and (context.unit_ids is None or station in context.unit_ids)
-        and (context.district_ids is None or district in context.district_ids)
+    return access.in_scope(station, context.unit_ids) and access.in_scope(
+        district, context.district_ids
     )
 
 

@@ -5,8 +5,10 @@ import re
 from typing import Tuple
 
 try:
+    from . import access
     from .db import DBError
 except ImportError:
+    import access
     from db import DBError
 
 
@@ -85,9 +87,9 @@ def filter_audit_rows(context, rows):
         if context.audit_visibility == "statewide_summary":
             visible.append(dict(row))
         elif context.audit_visibility == "district":
-            if row.get("DistrictID") in tuple(context.district_ids or ()):
+            if access.in_scope(row.get("DistrictID"), context.district_ids):
                 visible.append(dict(row))
-        elif row.get("EmployeeID") == context.employee_id:
+        elif access.same_identifier(row.get("EmployeeID"), context.employee_id):
             visible.append(dict(row))
     return tuple(visible)
 

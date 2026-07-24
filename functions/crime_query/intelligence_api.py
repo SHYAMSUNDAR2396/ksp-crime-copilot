@@ -162,9 +162,9 @@ def _scope_rows(context, cases):
         district = row.get("DistrictID")
         if station is None or district is None:
             continue
-        if context.unit_ids is not None and station not in context.unit_ids:
+        if not access.in_scope(station, context.unit_ids):
             continue
-        if context.district_ids is not None and district not in context.district_ids:
+        if not access.in_scope(district, context.district_ids):
             continue
         result.append(row)
     return result

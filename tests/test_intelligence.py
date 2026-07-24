@@ -49,6 +49,18 @@ def test_analytics_view_returns_aggregate_warning():
     assert all("FIR/" in citation for citation in result["citations"])
 
 
+def test_analytics_view_accepts_catalyst_string_scope_identifiers():
+    catalyst_rows = [
+        dict(row, PoliceStationID=str(row["PoliceStationID"]), DistrictID=str(row["DistrictID"]))
+        for row in cases()
+    ]
+
+    result = analytics_view(context(("query_structured_cases",)), catalyst_rows)
+
+    assert result["trends"]
+    assert result["trends"][0]["station_id"] == "1"
+
+
 def test_prevention_repeat_offender_leads_are_command_scoped_and_cited():
     command = context(
         ("query_structured_cases", "view_graph"), bucket="SP_COMMAND"

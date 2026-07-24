@@ -28,3 +28,13 @@ def test_audit_visibility_is_fixed_by_context():
     assert district == (rows[0],)
     statewide = filter_audit_rows(context(visibility="statewide_summary"), rows)
     assert statewide == tuple(rows)
+
+
+def test_audit_visibility_normalizes_catalyst_string_identifiers():
+    rows = [
+        {"EmployeeID": "9", "DistrictID": "10"},
+        {"EmployeeID": "10", "DistrictID": "11"},
+    ]
+
+    assert filter_audit_rows(context(), rows) == (rows[0],)
+    assert filter_audit_rows(context(visibility="district"), rows) == (rows[0],)

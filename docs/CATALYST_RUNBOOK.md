@@ -126,10 +126,12 @@ you need to see exactly what it did).
 
 **One real behavior difference found**: ZCQL returns every column value as
 a string regardless of underlying column type (e.g. an `int` `StateID`
-comes back as `"1"`, not `1`). Nothing in this codebase currently depends
-on numeric typing of query results (RBAC and citation matching already
-treat row values as strings), so no fix was needed — noted here in case a
-future feature adds numeric comparisons on result rows.
+comes back as `"1"`, not `1`). The caller identity adapter converts trusted
+identity fields at the DB boundary, and the shared access/intelligence scope
+helpers normalize numeric identifiers before comparing them. This keeps live
+analytics, graph visibility, audit filtering, and assigned-alert actions
+consistent with the SQLite path without coercing arbitrary narrative or
+crime-number values.
 
 **Three real deployment bugs found and fixed, none of which any local test
 could have caught** (all fixed in commit `e8060a6`):

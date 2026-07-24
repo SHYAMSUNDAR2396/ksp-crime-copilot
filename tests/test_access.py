@@ -108,6 +108,19 @@ def test_case_scope_and_pair_scope(fake_db):
     assert not can_read_case_pair(context, visible, hidden)
 
 
+def test_case_scope_normalizes_catalyst_string_identifiers(fake_db):
+    context = resolve_access_context(
+        Caller(employee_id=41, unit_id=7, district_id=2, rank_hierarchy=6), fake_db
+    )
+
+    assert can_read_case(
+        context, {"PoliceStationID": "7", "DistrictID": "2"}
+    )
+    assert not can_read_case(
+        context, {"PoliceStationID": "8", "DistrictID": "2"}
+    )
+
+
 def test_access_context_scopes_are_immutable(fake_db):
     context = resolve_access_context(
         Caller(employee_id=14, unit_id=1, district_id=1, rank_hierarchy=4), fake_db
@@ -231,3 +244,22 @@ def test_si_io_may_dispose_alert_when_cases_are_assigned_to_caller(fake_db):
     }
 
     assert can_act_on_alert(context, alert, "Dismissed")
+
+
+def test_alert_assignment_normalizes_catalyst_string_identifiers(fake_db):
+    context = resolve_access_context(
+        Caller(employee_id=20, unit_id=1, district_id=1, rank_hierarchy=5), fake_db
+    )
+    alert = {
+        "anchor_case": {
+            "PoliceStationID": "1", "DistrictID": "1",
+            "PolicePersonID": "20",
+        },
+        "matched_case": {
+            "PoliceStationID": "2", "DistrictID": "1",
+            "IOID": "20",
+        },
+        "note": "Assigned investigation confirmed.",
+    }
+
+    assert can_act_on_alert(context, alert, "Linked")

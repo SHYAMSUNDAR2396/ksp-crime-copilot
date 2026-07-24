@@ -171,12 +171,33 @@ def require_capability(context, capability):
         )
 
 
-def _in_scope(value, scope_ids):
-    if value is None:
+def in_scope(value, scope_ids):
+    candidate = coerce_identifier(value)
+    if candidate is None:
         return False
     if scope_ids is None:
         return True
-    return value in scope_ids
+    return candidate in tuple(
+        item for item in (coerce_identifier(value) for value in scope_ids)
+        if item is not None
+    )
+
+
+def coerce_identifier(value):
+    """Normalize Catalyst ZCQL numeric strings without trusting other values."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def same_identifier(left, right):
+    """Compare IDs across SQLite integers and Catalyst ZCQL strings."""
+    left_id = coerce_identifier(left)
+    right_id = coerce_identifier(right)
+    return left_id is not None and left_id == right_id
 
 
 def can_read_case(context, case_row, capability="query_structured_cases"):
@@ -185,7 +206,7 @@ def can_read_case(context, case_row, capability="query_structured_cases"):
     district_id = case_row.get("DistrictID")
     if station_id is None or district_id is None:
         return False
-    return _in_scope(station_id, context.unit_ids) and _in_scope(
+    return in_scope(station_id, context.unit_ids) and in_scope(
         district_id, context.district_ids
     )
 
@@ -213,7 +234,7 @@ def _assigned_employee_id(case_row):
 
 
 def _assigned_to_caller(case_row, employee_id):
-    return _assigned_employee_id(case_row) == employee_id
+    return same_identifier(_assigned_employee_id(case_row), employee_id)
 
 
 def can_act_on_alert(context, alert, action):

@@ -20,6 +20,16 @@ def test_fixed_projections_translate_catalyst_rowids_to_business_ids():
     assert "CaseMaster.CrimeMajorHeadID = CrimeHead.ROWID" in intelligence_api.CASE_PROJECTION
 
 
+def test_scope_rows_accepts_catalyst_string_identifiers():
+    context = intelligence_api.access.AccessContext(
+        9, 4, "INSPECTOR", (1,), (10,), frozenset({"query_structured_cases"}),
+        "rbac_masked", frozenset(), "district",
+    )
+    rows = [{"CaseMasterID": "1", "PoliceStationID": "1", "DistrictID": "10"}]
+
+    assert intelligence_api._scope_rows(context, rows) == rows
+
+
 def test_network_operation_returns_cited_scope_safe_data(tmp_path):
     db = _db(tmp_path)
     result = handle_operation({
