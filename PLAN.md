@@ -25,6 +25,9 @@ source .venv/bin/activate
 python -m tools.demo_check --sqlite build/demo-crime.db --output docs/demo-replay.json
 ```
 
+The production handoff uses the same command with `--require-live`; it exits
+non-zero until the Catalyst account-side gates are configured and verified.
+
 The command is intentionally offline and redacted; `ok: true` proves the
 replayable demo and deployment artifacts, not production account readiness.
 

@@ -41,6 +41,20 @@ The generated transcript verifies:
 9. versioned indexing, batch/live silent-match parity, recipient routing, and
    a note-bearing `Linked` transition.
 
+For the production handoff, reuse the same gate with live enforcement:
+
+```bash
+python -m tools.demo_check \
+  --require-live \
+  --sqlite build/demo-crime.db \
+  --output docs/demo-replay.json
+```
+
+This command still runs all nine replay beats, but exits non-zero when any
+Catalyst CLI, endpoint, principal-map, or other account-side gate is missing.
+It is the required pre-deployment gate; the normal command above remains the
+disconnected demo check.
+
 The local export is HTML because SmartBrowz is an account-side dependency. A
 live PDF smoke test remains required before production sign-off. The JSON
 contains only synthetic records and summary counts; it must not be replaced
