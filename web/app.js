@@ -171,6 +171,24 @@
       " · hotspots: " + hotspots.length +
       ". Geographic and temporal decision support only.";
     intelligenceOutput.appendChild(trend);
+    const leads = (data.prevention && data.prevention.repeat_offender_leads) || [];
+    if (leads.length) {
+      const leadHeading = document.createElement("p");
+      leadHeading.textContent = "Command prevention leads · investigation only:";
+      intelligenceOutput.appendChild(leadHeading);
+      const leadList = document.createElement("ul");
+      leadList.className = "prevention-leads";
+      leads.forEach(function (lead) {
+        const item = document.createElement("li");
+        item.appendChild(document.createTextNode(
+          (lead.names || []).join(" / ") + " · " +
+          String(lead.case_count || 0) + " linked visible cases · citations: "
+        ));
+        appendCitationLinks(item, lead.citations || []);
+        leadList.appendChild(item);
+      });
+      intelligenceOutput.appendChild(leadList);
+    }
   }
 
   function renderAudit(data, result) {

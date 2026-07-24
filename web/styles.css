@@ -26,6 +26,8 @@ h1 { margin: 4px 0 0; font-size: 1.7rem; }
 .alert-action { padding: 5px 8px; font-size: .75rem; }
 .narrative-results { margin: 8px 0 0; padding-left: 1.2rem; }
 .narrative-results li { margin: 8px 0; }
+.prevention-leads { margin: 8px 0 0; padding-left: 1.2rem; }
+.prevention-leads li { margin: 8px 0; }
 .network-graph { width: 100%; min-height: 220px; border-radius: 8px; background: #eef4f8; }
 .network-graph text { font: 11px system-ui, sans-serif; fill: #233044; }
 .network-graph line { stroke: #8da6bb; stroke-width: 1.5; }

@@ -47,3 +47,32 @@ def test_analytics_view_returns_aggregate_warning():
     assert "warning" in result
     assert "prevention" in result
     assert all("FIR/" in citation for citation in result["citations"])
+
+
+def test_prevention_repeat_offender_leads_are_command_scoped_and_cited():
+    command = context(
+        ("query_structured_cases", "view_graph"), bucket="SP_COMMAND"
+    )
+    rows = [
+        dict(cases()[0], AccusedProfiles=(("Ravi Kumar", "30", "1"),)),
+        dict(cases()[1], CaseMasterID=2, CrimeNo="FIR/2",
+             AccusedProfiles=(("Ravi K", "31", "1"),)),
+        dict(cases()[1], CaseMasterID=3, CrimeNo="FIR/3",
+             AccusedProfiles=(("Another Person", "40", "2"),)),
+        {"CaseMasterID": 4, "CrimeNo": "FIR/4", "PoliceStationID": 1,
+         "DistrictID": 10, "CrimeRegisteredDate": "2026-06-04",
+         "latitude": 14.0, "longitude": 77.0,
+         "AccusedProfiles": (("Ravi Kumar", "30", "1"),)},
+    ]
+
+    result = analytics_view(command, rows)
+    leads = result["prevention"]["repeat_offender_leads"]
+
+    assert len(leads) == 1
+    assert leads[0]["case_ids"] == (1, 2)
+    assert leads[0]["citations"] == ("FIR/1", "FIR/2")
+    assert "Ravi" in " ".join(leads[0]["names"])
+    assert result["citations"] == ("FIR/1", "FIR/2", "FIR/3", "FIR/4")
+
+    inspector = analytics_view(context(("query_structured_cases", "view_graph")), rows)
+    assert inspector["prevention"]["repeat_offender_leads"] == ()

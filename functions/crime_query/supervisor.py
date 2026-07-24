@@ -115,7 +115,9 @@ AGENT_SPECS = {
 TASK_AGENT_ORDER = {
     "structured_query": ("Structured Query Agent", "Composition Agent"),
     "narrative_query": ("Narrative Retrieval Agent", "Composition Agent"),
-    "analytics": ("Structured Query Agent", "Analytics Agent", "Composition Agent"),
+    "analytics": (
+        "Structured Query Agent", "Analytics Agent", "Graph Agent", "Composition Agent",
+    ),
     "graph": (
         "Structured Query Agent",
         "Narrative Retrieval Agent",

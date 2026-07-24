@@ -415,6 +415,13 @@ def _handle_operation(payload, db, today=None, analytics_provider=None):
             "Analytics Agent", data.get("trends", ()) + data.get("hotspots", ()),
             citations, claims, "scoped_analytics", "intelligence-analytics-v1",
         ),
+        "Graph Agent": lambda _task, _payload: _operation_bundle(
+            "Graph Agent",
+            data.get("prevention", {}).get("repeat_offender_leads", ()),
+            citations,
+            ("Command-only repeat-offender leads are investigative leads, not risk scores.",),
+            "repeat_offender_graph", "intelligence-prevention-v1",
+        ),
     }
     handlers = {
         name: operation_handlers[name]

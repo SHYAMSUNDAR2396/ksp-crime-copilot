@@ -15,6 +15,19 @@ python -m tools.demo_replay \
 ```
 
 The command prints `{"failed": 0, "passed": 9}` when the replay is healthy.
+
+For the fastest demo handoff, run the combined gate:
+
+```bash
+python -m tools.demo_check \
+  --sqlite build/demo-crime.db \
+  --output docs/demo-replay.json
+```
+
+It prints a redacted report with `ok: true` when the nine-beat demo and local
+Catalyst deployment artifacts pass. `live_ready: false` is expected until the
+Catalyst CLI, authenticated principal maps, and optional QuickML endpoints are
+configured; it does not block the disconnected demo.
 The generated transcript verifies:
 
 1. text/voice citation parity;
@@ -32,3 +45,18 @@ The local export is HTML because SmartBrowz is an account-side dependency. A
 live PDF smoke test remains required before production sign-off. The JSON
 contains only synthetic records and summary counts; it must not be replaced
 with production case data.
+
+## Catalyst integration handoff
+
+After the offline gate passes, deploy the two Advanced I/O functions and web
+client from the repository root:
+
+```bash
+catalyst deploy
+```
+
+Then follow [`CATALYST_RUNBOOK.md`](CATALYST_RUNBOOK.md) for the account-side
+authentication mappings and the redacted authenticated smoke command. The
+checked-in `catalyst.json`, function configuration files, security-rule
+contract, and predeploy vendor hook are the integration boundary; production
+tokens and principal mappings stay outside the repository.

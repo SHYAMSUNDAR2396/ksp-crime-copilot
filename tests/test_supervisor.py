@@ -77,6 +77,19 @@ def test_mixed_task_orders_all_available_evidence_agents_before_composition():
     )
 
 
+def test_analytics_task_adds_optional_graph_evidence_for_command_roles():
+    selected = select_agents(
+        "analytics", _context(("query_structured_cases", "view_graph"))
+    )
+
+    assert selected == (
+        "Structured Query Agent",
+        "Analytics Agent",
+        "Graph Agent",
+        "Composition Agent",
+    )
+
+
 def test_silent_match_task_orders_structured_narrative_graph_silent_match_then_composition():
     context = _context(
         (

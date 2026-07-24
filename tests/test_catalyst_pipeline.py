@@ -16,4 +16,5 @@ def test_catalyst_pipeline_has_a_safe_verification_stage():
     assert any("pytest" in step for step in steps)
     assert any("catalyst_preflight" in step for step in steps)
     assert any("demo_replay" in step for step in steps)
+    assert any("demo_check" in step for step in steps)
     assert all("--require-live" not in step for step in steps)

@@ -13,3 +13,4 @@ jobs:
       - python3 -m tools.catalyst_preflight
       - python3 -m tools.prepare_catalyst_deploy
       - python3 -m tools.demo_replay
+      - python3 -m tools.demo_check

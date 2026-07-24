@@ -27,3 +27,11 @@ def test_browser_client_declares_same_origin_content_security_policy():
     assert "default-src 'self'" in source
     assert "connect-src 'self'" in source
     assert "script-src 'self'" in source
+
+
+def test_browser_client_renders_cited_command_prevention_leads():
+    source = (Path(__file__).parents[1] / "web" / "app.js").read_text(encoding="utf-8")
+
+    assert "repeat_offender_leads" in source
+    assert "Command prevention leads" in source
+    assert "appendCitationLinks(item, lead.citations || [])" in source

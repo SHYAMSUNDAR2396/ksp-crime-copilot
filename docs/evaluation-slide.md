@@ -11,7 +11,7 @@ pending an authenticated project run.
 |---|---:|---:|---|
 | SQL execution accuracy (30 labelled questions) | 100.0% | ≥ 85% | PASS |
 | Unsupported CrimeNo hallucination rate | 0.0% | 0% | PASS |
-| Local p95 end-to-end latency | 0.020s | < 8s | PASS |
+| Local p95 end-to-end latency | 0.014s | < 8s | PASS |
 | Backup replay beats | 9/9 | 9/9 | PASS |
 
 ## Live measurement gate
