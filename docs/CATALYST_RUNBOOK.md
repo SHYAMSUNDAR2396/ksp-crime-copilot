@@ -5,12 +5,13 @@ against `SqliteDB` and fakes. The steps below need a real Zoho Catalyst
 account/CLI, against project `crime-copilot` (function URL
 `https://crime-copilot-60075198995.development.catalystserverless.in/server/crime_query/`).
 
-**Current workspace status (2026-07-23): live readiness is not verified.** The
-Catalyst CLI is not available in this workspace, the principal mapping is a
-placeholder, and the multilingual embedding/RAG endpoints are intentionally
-blank in the checked-in configuration. The historical notes below record
-earlier account observations and implementation decisions; they are not a
-substitute for rerunning the checks against the current Catalyst project.
+**Current workspace status (2026-07-24): live readiness is not verified.** The
+Catalyst CLI is installed, but this workspace is not yet authenticated; the
+principal mapping is a placeholder, and the multilingual embedding/RAG
+endpoints are intentionally blank in the checked-in configuration. The
+historical notes below record earlier account observations and implementation
+decisions; they are not a substitute for rerunning the checks against the
+current Catalyst project.
 Run the safe local gate first:
 
 ```bash
@@ -21,6 +22,19 @@ python -m tools.catalyst_preflight --require-live
 The second command must return exit code 0, followed by the authenticated
 deployment and smoke tests in this document, before production readiness is
 claimed.
+
+Once the live gate is configured, use the guarded release command. It prepares
+the independently deployed `silent_match` vendor bundle and only invokes the
+Catalyst CLI after the live preflight passes. Without `--deploy`, it performs a
+package-only release check:
+
+```bash
+python -m tools.catalyst_release --project crime-copilot
+python -m tools.catalyst_release --project crime-copilot --deploy
+```
+
+The command never prints configuration values or deployment output. Review the
+redacted JSON status and use the smoke contract below after a successful deploy.
 
 The repeatable smoke contract is available as an opt-in command. It prints
 only step names, status codes, and fixed contract results; it never prints

@@ -248,6 +248,17 @@ python -m tools.catalyst_preflight --require-live
 The first command is expected to pass locally with warnings when account-side
 gates are absent. The second must pass before calling the deployment live-ready.
 
+For a single guarded release flow after authentication and live configuration,
+run the package-only check first, then add `--deploy`:
+
+```bash
+python -m tools.catalyst_release --project crime-copilot
+python -m tools.catalyst_release --project crime-copilot --deploy
+```
+
+This command fails closed before packaging or deployment when any live gate is
+missing.
+
 After deployment, use the opt-in redacted smoke runner instead of copying
 tokens or response bodies into shell history:
 
