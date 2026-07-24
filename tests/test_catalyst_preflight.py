@@ -43,6 +43,19 @@ def test_schema_contract_rejects_missing_operational_column(tmp_path):
     assert "SilentMatchAlert" in detail
 
 
+def test_python39_syntax_gate_rejects_newer_language_syntax(tmp_path):
+    (tmp_path / "functions/crime_query").mkdir(parents=True)
+    (tmp_path / "functions/crime_query/new_syntax.py").write_text(
+        "match value:\n    case 1:\n        pass\n",
+        encoding="utf-8",
+    )
+
+    ok, detail = catalyst_preflight._python39_syntax(tmp_path)
+
+    assert ok is False
+    assert "new_syntax.py" in detail
+
+
 def test_local_preflight_passes_structure_and_reports_live_warnings():
     report = run_preflight(ROOT, require_live=False, catalyst_available=False)
 

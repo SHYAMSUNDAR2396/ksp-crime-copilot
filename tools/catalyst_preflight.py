@@ -7,6 +7,7 @@ or a deployment checklist.
 """
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -229,6 +230,18 @@ def _schema_contract(root):
     return True, "checked-in DDL matches application schema catalog"
 
 
+def _python39_syntax(root):
+    """Check deployed function sources using Catalyst's Python 3.9 grammar."""
+    root = Path(root)
+    paths = sorted((root / "functions").rglob("*.py"))
+    for path in paths:
+        try:
+            ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=(3, 9))
+        except (OSError, SyntaxError) as exc:
+            return False, "Python 3.9 syntax check failed: {}".format(path.name)
+    return True, "deployed function sources parse as Python 3.9"
+
+
 def run_preflight(
     root,
     require_live=False,
@@ -316,6 +329,9 @@ def run_preflight(
         )
         check("{}_no_embedded_secrets".format(key), not embedded_secret,
               "no token or secret value in deployment config")
+
+    python39_ok, python39_detail = _python39_syntax(root)
+    check("python39_syntax", python39_ok, python39_detail)
 
     schema_path = root / "docs/schema-ddl.sql"
     schema_text = schema_path.read_text(encoding="utf-8") if schema_path.exists() else ""
